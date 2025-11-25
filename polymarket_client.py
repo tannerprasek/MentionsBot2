@@ -126,6 +126,97 @@ class PolymarketClient:
             print(f"Error fetching mentions markets: {e}")
             return []
 
+    def get_earnings_events(self, ticker: str = None, limit: int = 100) -> List[Dict]:
+        """
+        Get earnings call events from Polymarket
+        These are events with format: "What will [Company] say during their next earnings call?"
+
+        Args:
+            ticker: Optional ticker/company name to filter for
+            limit: Maximum number of events to fetch
+
+        Returns:
+            List of event dicts, each containing multiple sub-markets
+        """
+        try:
+            url = f"{self.GAMMA_API}/events"
+
+            # Fetch events in batches
+            events = []
+            batch_size = 50
+            offset = 0
+
+            while len(events) < limit:
+                params = {
+                    'limit': min(batch_size, limit - len(events)),
+                    'offset': offset,
+                    'closed': 'false'
+                }
+
+                response = self.session.get(url, params=params, timeout=15)
+                response.raise_for_status()
+
+                batch = response.json()
+                if not batch:
+                    break
+
+                events.extend(batch)
+                offset += len(batch)
+
+                if len(batch) < batch_size:
+                    break
+
+                time.sleep(0.15)
+
+            # Filter for earnings call events
+            earnings_patterns = ['earnings call', 'say during their next', 'earnings']
+            earnings_events = []
+
+            for event in events:
+                title = event.get('title', '').lower()
+
+                # Check if it's an earnings event
+                is_earnings = any(pattern in title for pattern in earnings_patterns)
+
+                if is_earnings:
+                    # If ticker specified, only include events mentioning that ticker
+                    if ticker is None:
+                        earnings_events.append(event)
+                    else:
+                        ticker_variations = [
+                            ticker.lower(),
+                            ticker.upper(),
+                            f'({ticker.lower()})',
+                            f'({ticker.upper()})'
+                        ]
+                        if any(var in title for var in ticker_variations):
+                            earnings_events.append(event)
+
+            return earnings_events
+
+        except Exception as e:
+            print(f"Error fetching earnings events: {e}")
+            return []
+
+    def get_event_by_slug(self, slug: str) -> Optional[Dict]:
+        """
+        Get a specific event by its slug
+
+        Args:
+            slug: Event slug from URL (e.g., 'what-will-dell-say-during-their-next-earnings-call')
+
+        Returns:
+            Event dict with nested markets, or None if not found
+        """
+        try:
+            url = f"{self.GAMMA_API}/events/slug/{slug}"
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching event {slug}: {e}")
+            return None
+
     def get_market_prices(self, market_id: str) -> Optional[Dict]:
         """Get current prices for a market"""
         try:
@@ -192,6 +283,56 @@ class PolymarketClient:
             info += f"Volume: ${volume:,.0f}\n"
         if liquidity:
             info += f"Liquidity: ${liquidity:,.0f}\n"
+
+        return info
+
+    def format_event_info(self, event: Dict, show_all_markets: bool = False) -> str:
+        """
+        Format earnings event information for display
+
+        Args:
+            event: Event dict from Gamma API
+            show_all_markets: Show all sub-markets or just summary
+
+        Returns:
+            Formatted string
+        """
+        title = event.get('title', 'N/A')
+        event_id = event.get('id', 'N/A')
+        slug = event.get('slug', 'N/A')
+        volume = event.get('volume', 0)
+        closed = event.get('closed', False)
+        markets = event.get('markets', [])
+
+        info = f"\nEvent: {title}\n"
+        info += f"ID: {event_id}\n"
+        info += f"Slug: {slug}\n"
+        info += f"Status: {'Closed' if closed else 'Open'}\n"
+        info += f"Sub-markets: {len(markets)}\n"
+        info += f"Total Volume: ${volume:,.0f}\n"
+
+        if show_all_markets and markets:
+            info += "\nSub-markets:\n"
+            for i, market in enumerate(markets[:20], 1):  # Show first 20
+                question = market.get('question', 'N/A')
+                prices = market.get('outcomePrices', [])
+
+                # Parse prices if needed
+                if isinstance(prices, str):
+                    import json
+                    try:
+                        prices = json.loads(prices)
+                    except:
+                        prices = []
+
+                yes_price = prices[0] if len(prices) > 0 else 'N/A'
+                if isinstance(yes_price, (int, float)):
+                    info += f"  {i}. {question}: {yes_price:.2%}\n"
+                else:
+                    info += f"  {i}. {question}: {yes_price}\n"
+
+            if len(markets) > 20:
+                info += f"  ... and {len(markets) - 20} more\n"
 
         return info
 

@@ -11,40 +11,38 @@ from mentions_analyzer import MentionsAnalyzer
 
 
 def scan_mentions_markets():
-    """Scan and display all available mentions markets on Polymarket"""
-    print("\n🔍 Scanning Polymarket for mentions markets...\n")
+    """Scan and display all available earnings call events on Polymarket"""
+    print("\n🔍 Scanning Polymarket for earnings call events...\n")
 
     client = PolymarketClient()
-    markets = client.get_mentions_markets()
+    events = client.get_earnings_events()
 
-    if not markets:
-        print("No mentions markets found.")
+    if not events:
+        print("No earnings call events found.")
+        print("\nNote: Earnings markets are seasonal and created during earnings season.")
+        print("Try again during quarterly earnings periods.")
         return
 
-    print(f"Found {len(markets)} mentions markets:\n")
+    print(f"Found {len(events)} earnings call events:\n")
     print("-" * 80)
 
-    for i, market in enumerate(markets, 1):
-        print(f"\n{i}. {market.get('question', 'N/A')}")
-        print(f"   ID: {market.get('id', 'N/A')}")
-
-        # Use format_market_info which handles the Gamma API format
-        info = client.format_market_info(market)
-        # Print just the prices part (skip the header lines)
-        for line in info.split('\n')[2:]:
-            if line.strip():
-                print(f"   {line.strip()}")
+    for i, event in enumerate(events, 1):
+        print(f"\n{i}. {event.get('title', 'N/A')}")
+        print(f"   ID: {event.get('id', 'N/A')}")
+        print(f"   Slug: {event.get('slug', 'N/A')}")
+        print(f"   Sub-markets: {len(event.get('markets', []))}")
+        print(f"   Volume: ${event.get('volume', 0):,.0f}")
 
     print("\n" + "-" * 80)
 
 
-def analyze_ticker(ticker: str, market_id: str = None):
+def analyze_ticker(ticker: str, event_slug: str = None):
     """
-    Analyze a ticker for mispricing opportunities
+    Analyze a ticker for mispricing opportunities in earnings call events
 
     Args:
         ticker: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
-        market_id: Optional specific market ID to analyze
+        event_slug: Optional specific event slug to analyze
     """
     print(f"\n🎯 Analyzing ticker: {ticker.upper()}\n")
 
@@ -53,20 +51,20 @@ def analyze_ticker(ticker: str, market_id: str = None):
     downloader = TranscriptDownloader()
     analyzer = MentionsAnalyzer()
 
-    # Step 1: Find relevant markets
-    print("Step 1: Finding relevant Polymarket mentions markets...")
-    if market_id:
-        # TODO: Add method to fetch specific market by ID
-        markets = client.get_mentions_markets(ticker)
-        markets = [m for m in markets if m.get('id') == market_id]
+    # Step 1: Find relevant earnings events
+    print("Step 1: Finding relevant Polymarket earnings events...")
+    if event_slug:
+        event = client.get_event_by_slug(event_slug)
+        events = [event] if event else []
     else:
-        markets = client.get_mentions_markets(ticker)
+        events = client.get_earnings_events(ticker)
 
-    if not markets:
-        print(f"❌ No mentions markets found for {ticker}")
+    if not events:
+        print(f"❌ No earnings call events found for {ticker}")
+        print("\nNote: These markets are seasonal. Try during quarterly earnings periods.")
         return
 
-    print(f"✓ Found {len(markets)} relevant market(s)\n")
+    print(f"✓ Found {len(events)} earnings event(s)\n")
 
     # Step 2: Download transcripts
     print("Step 2: Downloading transcripts from public sources...")
@@ -80,58 +78,77 @@ def analyze_ticker(ticker: str, market_id: str = None):
 
     print(f"✓ Downloaded {len(transcripts)} transcript(s)\n")
 
-    # Step 3: Analyze each market
+    # Combine all transcript texts for searching
+    all_text = '\n'.join([t['text'] for t in transcripts])
+
+    # Step 3: Analyze each event
     print("Step 3: Analyzing for mispricings...\n")
 
-    for market in markets:
-        # Analyze all transcripts
-        analyses = []
-        for transcript in transcripts:
-            analysis = analyzer.analyze_transcript(transcript, ticker)
-            analyses.append(analysis)
+    for event in events:
+        print("=" * 80)
+        print(f"EVENT: {event.get('title', 'N/A')}")
+        print("=" * 80 + "\n")
 
-        # Get total mentions
-        total_mentions = sum(a['total_mentions'] for a in analyses)
+        markets = event.get('markets', [])
+        print(f"Analyzing {len(markets)} sub-markets (phrases)...\n")
 
-        # Get market price (try to extract YES price from Gamma API format)
-        market_price = 0.5  # Default
-        outcomes = market.get('outcomes', [])
-        outcome_prices = market.get('outcomePrices', [])
+        mispricings_found = []
 
-        # Parse if they're JSON strings
-        if isinstance(outcomes, str):
-            import json
-            try:
-                outcomes = json.loads(outcomes)
-            except:
-                outcomes = []
+        for market in markets:
+            phrase = market.get('question', '')
+            prices = market.get('outcomePrices', [])
 
-        if isinstance(outcome_prices, str):
-            import json
-            try:
-                outcome_prices = json.loads(outcome_prices)
-            except:
-                outcome_prices = []
-
-        # Find YES price
-        for i, outcome in enumerate(outcomes):
-            if str(outcome).upper() == 'YES' and i < len(outcome_prices):
+            # Parse prices
+            if isinstance(prices, str):
+                import json
                 try:
-                    market_price = float(outcome_prices[i])
-                except (ValueError, TypeError):
-                    market_price = 0.5
-                break
+                    prices = json.loads(prices)
+                except:
+                    prices = []
 
-        # Detect mispricing
-        mispricing = analyzer.detect_mispricing(
-            market_question=market.get('question', ''),
-            market_price=market_price,
-            actual_mentions=total_mentions
-        )
+            yes_price = float(prices[0]) if len(prices) > 0 else 0.5
 
-        # Generate and print report
-        report = analyzer.generate_report(market, analyses, mispricing)
-        print(report)
+            # Count how many times this phrase appears in transcripts
+            phrase_count = analyzer.count_mentions(all_text, [phrase], case_sensitive=False)
+            total_count = phrase_count.get(phrase, 0)
+
+            # Determine if phrase was mentioned (threshold = 1)
+            was_mentioned = total_count > 0
+
+            # Calculate expected price
+            expected_price = 0.90 if was_mentioned else 0.10
+
+            # Check for mispricing
+            price_diff = abs(yes_price - expected_price)
+            is_mispriced = price_diff > 0.20  # 20% threshold
+
+            if is_mispriced:
+                opportunity = "BUY_YES" if yes_price < expected_price else "BUY_NO"
+                mispricings_found.append({
+                    'phrase': phrase,
+                    'yes_price': yes_price,
+                    'expected_price': expected_price,
+                    'was_mentioned': was_mentioned,
+                    'count': total_count,
+                    'opportunity': opportunity,
+                    'price_diff': price_diff
+                })
+
+        # Print results
+        if mispricings_found:
+            print(f"🎯 Found {len(mispricings_found)} potential mispricings:\n")
+            for mp in mispricings_found:
+                print(f"Phrase: \"{mp['phrase']}\"")
+                print(f"  Mentioned: {'YES' if mp['was_mentioned'] else 'NO'} ({mp['count']} times)")
+                print(f"  Market Price (YES): {mp['yes_price']:.2%}")
+                print(f"  Expected Price: {mp['expected_price']:.2%}")
+                print(f"  Price Difference: {mp['price_diff']:.2%}")
+                print(f"  🎯 OPPORTUNITY: {mp['opportunity']}")
+                print()
+        else:
+            print("No significant mispricings detected for this event.\n")
+
+        print()
 
 
 def interactive_mode():
@@ -176,12 +193,12 @@ def interactive_mode():
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
-        description='Polymarket Mentions Bot - Identify mispricings in mentions markets'
+        description='Polymarket Mentions Bot - Identify mispricings in earnings call events'
     )
     parser.add_argument(
         '--scan',
         action='store_true',
-        help='Scan and display all mentions markets'
+        help='Scan and display all earnings call events'
     )
     parser.add_argument(
         '--ticker',
@@ -189,9 +206,9 @@ def main():
         help='Ticker symbol to analyze (e.g., AAPL, TSLA)'
     )
     parser.add_argument(
-        '--market-id',
+        '--event-slug',
         type=str,
-        help='Specific market ID to analyze'
+        help='Specific event slug to analyze (e.g., what-will-dell-say-during-their-next-earnings-call)'
     )
     parser.add_argument(
         '--interactive',
@@ -216,7 +233,7 @@ def main():
     elif args.scan:
         scan_mentions_markets()
     elif args.ticker:
-        analyze_ticker(args.ticker, args.market_id)
+        analyze_ticker(args.ticker, args.event_slug)
     else:
         parser.print_help()
 

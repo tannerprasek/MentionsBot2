@@ -23,8 +23,16 @@ class MentionsAnalyzer:
 
         counts = {}
         for term in search_terms:
-            # Use word boundaries to avoid partial matches
-            pattern = r'\b' + re.escape(term) + r'\b'
+            # For multi-word phrases, split by whitespace and join with \s+
+            # This allows flexible whitespace matching
+            term_parts = term.split()
+            if len(term_parts) > 1:
+                # Multi-word phrase: use \s+ between words for flexible spacing
+                pattern = r'\b' + r'\s+'.join(re.escape(part) for part in term_parts) + r'\b'
+            else:
+                # Single word: use simple word boundaries
+                pattern = r'\b' + re.escape(term) + r'\b'
+
             matches = re.findall(pattern, text, re.IGNORECASE if not case_sensitive else 0)
             counts[term] = len(matches)
 
