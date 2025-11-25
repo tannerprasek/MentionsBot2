@@ -36,13 +36,14 @@ def scan_mentions_markets():
     print("\n" + "-" * 80)
 
 
-def analyze_ticker(ticker: str, event_slug: str = None):
+def analyze_ticker(ticker: str, event_slug: str = None, transcript_file: str = None):
     """
     Analyze a ticker for mispricing opportunities in earnings call events
 
     Args:
         ticker: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
         event_slug: Optional specific event slug to analyze
+        transcript_file: Optional path to transcript text file
     """
     print(f"\n🎯 Analyzing ticker: {ticker.upper()}\n")
 
@@ -66,20 +67,32 @@ def analyze_ticker(ticker: str, event_slug: str = None):
 
     print(f"✓ Found {len(events)} earnings event(s)\n")
 
-    # Step 2: Download transcripts
-    print("Step 2: Downloading transcripts from public sources...")
-    transcripts = downloader.get_recent_transcripts(ticker)
+    # Step 2: Get transcript text
+    if transcript_file:
+        print(f"Step 2: Loading transcript from file: {transcript_file}...")
+        try:
+            with open(transcript_file, 'r', encoding='utf-8') as f:
+                all_text = f.read()
+            print(f"✓ Loaded transcript ({len(all_text):,} characters)\n")
+        except Exception as e:
+            print(f"❌ Error loading transcript file: {e}")
+            return
+    else:
+        print("Step 2: Downloading transcripts from public sources...")
+        print("⚠️  Note: SEC 8-K filings don't contain full earnings transcripts.")
+        print("   For accurate analysis, provide a transcript file with --transcript-file")
+        transcripts = downloader.get_recent_transcripts(ticker)
 
-    if not transcripts:
-        print(f"❌ No transcripts found for {ticker}")
-        print("   Note: Try checking if the ticker symbol is correct")
-        print("   or if there are recent SEC filings available.")
-        return
+        if not transcripts:
+            print(f"❌ No transcripts found for {ticker}")
+            print("   Note: Try checking if the ticker symbol is correct")
+            print("   or if there are recent SEC filings available.")
+            return
 
-    print(f"✓ Downloaded {len(transcripts)} transcript(s)\n")
+        print(f"✓ Downloaded {len(transcripts)} filing(s)\n")
 
-    # Combine all transcript texts for searching
-    all_text = '\n'.join([t['text'] for t in transcripts])
+        # Combine all transcript texts for searching
+        all_text = '\n'.join([t['text'] for t in transcripts])
 
     # Step 3: Analyze each event
     print("Step 3: Analyzing for mispricings...\n")
@@ -208,7 +221,12 @@ def main():
     parser.add_argument(
         '--event-slug',
         type=str,
-        help='Specific event slug to analyze (e.g., what-will-dell-say-during-their-next-earnings-call)'
+        help='Specific event slug to analyze (e.g., earnings-mentions-snowflake-2025-11-26)'
+    )
+    parser.add_argument(
+        '--transcript-file',
+        type=str,
+        help='Path to earnings transcript text file for analysis'
     )
     parser.add_argument(
         '--interactive',
@@ -233,7 +251,7 @@ def main():
     elif args.scan:
         scan_mentions_markets()
     elif args.ticker:
-        analyze_ticker(args.ticker, args.event_slug)
+        analyze_ticker(args.ticker, args.event_slug, args.transcript_file)
     else:
         parser.print_help()
 
