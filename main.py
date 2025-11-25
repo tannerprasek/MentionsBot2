@@ -108,7 +108,19 @@ def analyze_ticker(ticker: str, event_slug: str = None, transcript_file: str = N
         mispricings_found = []
 
         for market in markets:
-            phrase = market.get('question', '')
+            question = market.get('question', '')
+
+            # Extract the quoted phrase from the question
+            # Format: 'Will Snowflake say "Repurchase" during earnings call?'
+            # Extract: 'Repurchase'
+            import re
+            quote_match = re.search(r'"([^"]+)"', question)
+            if not quote_match:
+                # Skip if we can't find a quoted phrase
+                continue
+
+            phrase = quote_match.group(1)
+
             prices = market.get('outcomePrices', [])
 
             # Parse prices
@@ -123,7 +135,7 @@ def analyze_ticker(ticker: str, event_slug: str = None, transcript_file: str = N
 
             # Count how many times this phrase appears in transcripts
             phrase_count = analyzer.count_mentions(all_text, [phrase], case_sensitive=False)
-            total_count = phrase_count.get(phrase, 0)
+            total_count = phrase_count.get(phrase.lower() if phrase else phrase, 0)
 
             # Determine if phrase was mentioned (threshold = 1)
             was_mentioned = total_count > 0
@@ -150,13 +162,13 @@ def analyze_ticker(ticker: str, event_slug: str = None, transcript_file: str = N
         # Print results
         if mispricings_found:
             print(f"🎯 Found {len(mispricings_found)} potential mispricings:\n")
-            for mp in mispricings_found:
-                print(f"Phrase: \"{mp['phrase']}\"")
-                print(f"  Mentioned: {'YES' if mp['was_mentioned'] else 'NO'} ({mp['count']} times)")
-                print(f"  Market Price (YES): {mp['yes_price']:.2%}")
-                print(f"  Expected Price: {mp['expected_price']:.2%}")
-                print(f"  Price Difference: {mp['price_diff']:.2%}")
-                print(f"  🎯 OPPORTUNITY: {mp['opportunity']}")
+            for i, mp in enumerate(mispricings_found, 1):
+                print(f"{i}. Phrase: \"{mp['phrase']}\"")
+                print(f"   Mentioned: {'YES' if mp['was_mentioned'] else 'NO'} ({mp['count']} times)")
+                print(f"   Market Price (YES): {mp['yes_price']:.1%}")
+                print(f"   Expected: {mp['expected_price']:.0%}")
+                print(f"   Difference: {mp['price_diff']:.1%}")
+                print(f"   🎯 {mp['opportunity']}")
                 print()
         else:
             print("No significant mispricings detected for this event.\n")
