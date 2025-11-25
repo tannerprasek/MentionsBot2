@@ -1,65 +1,125 @@
 """
 Transcript downloader for fetching earnings call transcripts and other public sources
+Uses SEC EDGAR API with proper headers as required by SEC.gov
 """
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 import re
 import time
+import json
 
 
 class TranscriptDownloader:
     """Download transcripts from various public sources"""
 
-    def __init__(self):
+    # SEC requires User-Agent with company name and email
+    SEC_USER_AGENT = 'PolymarketMentionsBot research@example.com'
+
+    def __init__(self, user_email: str = 'research@example.com'):
+        """
+        Initialize transcript downloader
+
+        Args:
+            user_email: Email to include in SEC requests (required by SEC.gov)
+        """
         self.session = requests.Session()
+        self.sec_session = requests.Session()
+
+        # Regular session for non-SEC requests
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
 
-    def get_sec_filings(self, ticker: str, filing_type: str = "8-K") -> List[Dict]:
+        # SEC-specific session with required headers
+        self.sec_session.headers.update({
+            'User-Agent': f'PolymarketMentionsBot {user_email}',
+            'Accept-Encoding': 'gzip, deflate',
+            'Host': 'data.sec.gov'
+        })
+
+    def get_cik_from_ticker(self, ticker: str) -> Optional[str]:
         """
-        Fetch SEC filings for a ticker
-        8-K filings often contain earnings call information
+        Get CIK (Central Index Key) from ticker symbol using SEC API
+
+        Args:
+            ticker: Stock ticker symbol (e.g., 'AAPL')
+
+        Returns:
+            CIK string with leading zeros, or None if not found
         """
         try:
-            # SEC EDGAR search
-            search_url = f"https://www.sec.gov/cgi-bin/browse-edgar"
-            params = {
-                'action': 'getcompany',
-                'CIK': ticker,
-                'type': filing_type,
-                'dateb': '',
-                'owner': 'exclude',
-                'count': 10,
-                'search_text': ''
-            }
-
-            response = self.session.get(search_url, params=params, timeout=15)
+            # Use the company tickers JSON file from SEC
+            url = "https://www.sec.gov/files/company_tickers.json"
+            headers = {'User-Agent': self.SEC_USER_AGENT}
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
 
-            soup = BeautifulSoup(response.content, 'html.parser')
+            companies = response.json()
+
+            # Search for ticker
+            ticker_upper = ticker.upper()
+            for company in companies.values():
+                if company.get('ticker', '').upper() == ticker_upper:
+                    # Return CIK with leading zeros (10 digits)
+                    cik = str(company['cik_str']).zfill(10)
+                    return cik
+
+            return None
+
+        except Exception as e:
+            print(f"Error fetching CIK for {ticker}: {e}")
+            return None
+
+    def get_sec_filings(self, ticker: str, filing_type: str = "8-K", limit: int = 10) -> List[Dict]:
+        """
+        Fetch SEC filings for a ticker using SEC data API
+
+        Args:
+            ticker: Stock ticker symbol
+            filing_type: Type of filing (8-K, 10-Q, 10-K, etc.)
+            limit: Maximum number of filings to return
+
+        Returns:
+            List of filing dicts with 'date', 'url', 'type'
+        """
+        try:
+            # Get CIK first
+            cik = self.get_cik_from_ticker(ticker)
+            if not cik:
+                print(f"Could not find CIK for ticker {ticker}")
+                return []
+
+            # Use SEC data API
+            url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+            response = self.sec_session.get(url, timeout=15)
+            response.raise_for_status()
+
+            data = response.json()
             filings = []
 
-            # Parse the results table
-            table = soup.find('table', {'class': 'tableFile2'})
-            if table:
-                rows = table.find_all('tr')[1:]  # Skip header
-                for row in rows[:5]:  # Get recent 5 filings
-                    cols = row.find_all('td')
-                    if len(cols) >= 4:
-                        filing_date = cols[3].text.strip()
-                        doc_link = cols[1].find('a')
-                        if doc_link:
-                            filing_url = f"https://www.sec.gov{doc_link['href']}"
-                            filings.append({
-                                'date': filing_date,
-                                'url': filing_url,
-                                'type': filing_type
-                            })
+            # Parse recent filings
+            recent_filings = data.get('filings', {}).get('recent', {})
+            forms = recent_filings.get('form', [])
+            filing_dates = recent_filings.get('filingDate', [])
+            accession_numbers = recent_filings.get('accessionNumber', [])
+            primary_documents = recent_filings.get('primaryDocument', [])
 
-            # Rate limiting for SEC
-            time.sleep(0.1)
+            for i in range(len(forms)):
+                if forms[i] == filing_type and len(filings) < limit:
+                    # Remove dashes from accession number for URL
+                    acc_no = accession_numbers[i].replace('-', '')
+                    filing_url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no}/{primary_documents[i]}"
+
+                    filings.append({
+                        'date': filing_dates[i],
+                        'url': filing_url,
+                        'type': filing_type,
+                        'accession': accession_numbers[i]
+                    })
+
+            # Rate limiting for SEC (recommended: 10 requests per second max)
+            time.sleep(0.11)
             return filings
 
         except Exception as e:
@@ -69,7 +129,15 @@ class TranscriptDownloader:
     def download_transcript_text(self, url: str) -> Optional[str]:
         """Download and extract text from a URL"""
         try:
-            response = self.session.get(url, timeout=15)
+            # Use SEC session for SEC URLs
+            if 'sec.gov' in url:
+                # Update Host header for SEC
+                headers = self.sec_session.headers.copy()
+                headers['Host'] = 'www.sec.gov'
+                response = requests.get(url, headers=headers, timeout=15)
+            else:
+                response = self.session.get(url, timeout=15)
+
             response.raise_for_status()
 
             soup = BeautifulSoup(response.content, 'html.parser')

@@ -28,12 +28,12 @@ def scan_mentions_markets():
         print(f"\n{i}. {market.get('question', 'N/A')}")
         print(f"   ID: {market.get('id', 'N/A')}")
 
-        tokens = market.get('tokens', [])
-        if tokens:
-            for token in tokens:
-                outcome = token.get('outcome', 'Unknown')
-                price = token.get('price', 'N/A')
-                print(f"   {outcome}: {price}")
+        # Use format_market_info which handles the Gamma API format
+        info = client.format_market_info(market)
+        # Print just the prices part (skip the header lines)
+        for line in info.split('\n')[2:]:
+            if line.strip():
+                print(f"   {line.strip()}")
 
     print("\n" + "-" * 80)
 
@@ -93,16 +93,34 @@ def analyze_ticker(ticker: str, market_id: str = None):
         # Get total mentions
         total_mentions = sum(a['total_mentions'] for a in analyses)
 
-        # Get market price (try to extract YES price)
+        # Get market price (try to extract YES price from Gamma API format)
         market_price = 0.5  # Default
-        tokens = market.get('tokens', [])
-        for token in tokens:
-            if token.get('outcome', '').upper() == 'YES':
-                price_str = token.get('price', '0.5')
+        outcomes = market.get('outcomes', [])
+        outcome_prices = market.get('outcomePrices', [])
+
+        # Parse if they're JSON strings
+        if isinstance(outcomes, str):
+            import json
+            try:
+                outcomes = json.loads(outcomes)
+            except:
+                outcomes = []
+
+        if isinstance(outcome_prices, str):
+            import json
+            try:
+                outcome_prices = json.loads(outcome_prices)
+            except:
+                outcome_prices = []
+
+        # Find YES price
+        for i, outcome in enumerate(outcomes):
+            if str(outcome).upper() == 'YES' and i < len(outcome_prices):
                 try:
-                    market_price = float(price_str)
-                except ValueError:
+                    market_price = float(outcome_prices[i])
+                except (ValueError, TypeError):
                     market_price = 0.5
+                break
 
         # Detect mispricing
         mispricing = analyzer.detect_mispricing(

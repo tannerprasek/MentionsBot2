@@ -145,14 +145,31 @@ class MentionsAnalyzer:
         report += f"Market Question: {market.get('question', 'N/A')}\n"
         report += f"Market ID: {market.get('id', 'N/A')}\n\n"
 
-        # Current market prices
-        tokens = market.get('tokens', [])
-        if tokens:
+        # Current market prices (Gamma API format)
+        outcomes = market.get('outcomes', [])
+        outcome_prices = market.get('outcomePrices', [])
+
+        if outcomes and outcome_prices:
             report += "Current Market Prices:\n"
-            for token in tokens:
-                outcome = token.get('outcome', 'Unknown')
-                price = token.get('price', 'N/A')
-                report += f"  {outcome}: {price}\n"
+            try:
+                # Parse JSON strings if needed
+                if isinstance(outcomes, str):
+                    import json
+                    outcomes = json.loads(outcomes)
+                if isinstance(outcome_prices, str):
+                    import json
+                    outcome_prices = json.loads(outcome_prices)
+
+                for i, outcome in enumerate(outcomes):
+                    if i < len(outcome_prices):
+                        price = outcome_prices[i]
+                        if isinstance(price, (int, float)):
+                            report += f"  {outcome}: {price:.2%}\n"
+                        else:
+                            report += f"  {outcome}: {price}\n"
+            except Exception:
+                report += f"  Outcomes: {outcomes}\n"
+                report += f"  Prices: {outcome_prices}\n"
             report += "\n"
 
         # Transcript analysis
