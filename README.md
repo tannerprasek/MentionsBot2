@@ -1,0 +1,78 @@
+# CastBot
+
+Say "Hey Siri, CastBot", tell it what to watch and which TV. A server on your home network searches your indexers, picks the best torrent, and streams it to that Chromecast while it downloads.
+
+```
+Siri Shortcut ──POST /play──▶ CastBot server ──Torznab──▶ Prowlarr / Jackett
+                                   │
+                                   ├─ WebTorrent (downloads in sequence, serves HTTP with Range support)
+                                   └─ Chromecast (mDNS discovery, Default Media Receiver)
+```
+
+## Requirements
+
+- An always-on machine on the same LAN as the TVs (Mac mini, Raspberry Pi 4/5, NAS, old laptop), with Node 20 or newer
+- [Prowlarr](https://prowlarr.com) or [Jackett](https://github.com/Jackett/Jackett) with your indexers configured
+- Chromecasts or Google TVs on the same network/VLAN, with mDNS not blocked
+
+## Setup
+
+```bash
+npm install
+cp .env.example .env   # fill in TORZNAB_URL, TORZNAB_API_KEY, API_TOKEN, DEFAULT_TV
+npm start
+curl -H "Authorization: Bearer $API_TOKEN" http://localhost:8787/devices   # lists the TVs it found
+```
+
+Torznab URL:
+- **Prowlarr:** Indexers → (indexer) → copy the Torznab feed URL, e.g. `http://localhost:9696/1/api`. The API key is under Settings → General.
+- **Jackett:** `http://localhost:9117/api/v2.0/indexers/all/results/torznab/api`. The API key is shown at the top of the dashboard.
+
+To keep it running, use `pm2 start src/server.js --name castbot` or a systemd/launchd service.
+
+## Siri Shortcut
+
+Open the Shortcuts app on your iPhone, create a new shortcut, and name it **CastBot**. The name is what you say to Siri.
+
+1. **Ask for Input** (Text). Prompt: "What do you want to watch?"
+2. **Choose from Menu**. Prompt: "Which TV?" Add one item per TV, using the names from `/devices` (e.g. "Living Room TV", "Bedroom TV"). Inside each item, add a **Text** action containing that TV's name.
+3. **Get Contents of URL**
+   - URL: `http://<server-lan-ip>:8787/play`
+   - Method: `POST`
+   - Headers: `Authorization` = `Bearer <your API_TOKEN>`
+   - Request Body: JSON, with `title` = *Provided Input* and `tv` = *Menu Result*
+4. **Get Dictionary Value**: key `speak` from *Contents of URL*
+5. **Speak Text**: *Dictionary Value*
+
+Then say: "Hey Siri, CastBot" → "Breaking Bad season 2 episode 3" → "Bedroom TV".
+
+If you only have one TV, skip step 2 and set `DEFAULT_TV`.
+
+Add more shortcuts the same way for **CastBot Stop** (`POST /stop`), **CastBot Pause** (`POST /control/pause`), and **CastBot Resume** (`POST /control/resume`).
+
+**Away from home:** the phone has to reach the server. Install [Tailscale](https://tailscale.com) on the phone and the server, then use the server's Tailscale IP in the shortcut URL. The Chromecast still streams over your LAN.
+
+## API
+
+All endpoints except `/stream` need `Authorization: Bearer <API_TOKEN>` (or `?token=`).
+
+| Method | Path | Body | |
+|---|---|---|---|
+| POST | `/play` | `{ "title": "dune part two", "tv": "Living Room" }` | Searches and replies right away with the chosen release; streaming starts in the background |
+| POST | `/stop` | | Stops the cast and the torrent |
+| POST | `/control/:action` | `{ "value": 30 }` | `pause`, `resume`, `seek` (seconds), `volume` (0–1) |
+| GET | `/devices` | | Chromecasts found |
+| GET | `/status` | | Current state, download progress, speed, peers |
+
+Requests are parsed into queries: "season two episode 3" or "s2e3" becomes `S02E03`, and "season 1" becomes `S01` (a season pack; the matching episode file is chosen when an episode is given).
+
+## Release selection
+
+Results with fewer than `MIN_SEEDERS` seeders, larger than `MAX_SIZE_GB`, CAM/TS rips, HEVC/x265 (when `AVOID_HEVC=true`), or 4K (unless `ALLOW_4K=true`) are dropped. The rest are ranked by seeders, a `PREFERRED_QUALITY` match, WEB-DL/BluRay sources, and MP4 files.
+
+## Notes
+
+- The Default Media Receiver plays H.264 video in MP4 or MKV. HEVC and some audio codecs (DTS, TrueHD) won't play, which is why HEVC is filtered out. A Chromecast with Google TV handles more formats.
+- Playback starts once enough of the file has downloaded. Seeking ahead makes WebTorrent fetch that part first.
+- Files are kept in `DOWNLOAD_DIR`. Clear it out yourself when it fills up.
+- `npm test` runs the query-parser tests.
