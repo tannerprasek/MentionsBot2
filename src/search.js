@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 import { config } from './config.js'
+import { findProwlarrKey, prowlarrSearch } from './prowlarr.js'
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' })
 
@@ -27,8 +28,7 @@ function score (r, req) {
   return s
 }
 
-export async function search (req) {
-  if (!config.torznabUrl) throw new Error('TORZNAB_URL is not configured')
+async function torznabSearch (req) {
   const url = new URL(config.torznabUrl)
   url.searchParams.set('apikey', config.torznabApiKey)
   url.searchParams.set('t', 'search')
@@ -40,7 +40,7 @@ export async function search (req) {
   const doc = parser.parse(await res.text())
   const items = [].concat(doc?.rss?.channel?.item || [])
 
-  const results = items.map((item) => {
+  return items.map((item) => {
     const a = attrs(item)
     return {
       title: String(item.title),
@@ -49,6 +49,18 @@ export async function search (req) {
       size: Number(a.size || item.size || item.enclosure?.length || 0)
     }
   }).filter((r) => r.link)
+}
+
+// A Torznab URL set in Settings wins; otherwise search all indexers of the local Prowlarr.
+export async function search (req) {
+  let results
+  if (config.torznabUrl) {
+    results = await torznabSearch(req)
+  } else {
+    const key = config.torznabApiKey || findProwlarrKey()
+    if (!key) throw new Error('Prowlarr not found. Install it, or enter a Torznab URL in Settings')
+    results = await prowlarrSearch(req, key)
+  }
 
   return results
     .map((r) => ({ ...r, score: score(r, req) }))

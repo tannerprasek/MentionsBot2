@@ -5,6 +5,7 @@ import { config, EDITABLE, saveSettings } from './config.js'
 import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
+import { prowlarrStatus } from './prowlarr.js'
 import { listDevices, waitForDevice, play, stopCast, control } from './cast.js'
 
 const app = express()
@@ -74,8 +75,9 @@ app.get('/api/search', auth, async (req, res) => {
   }
 })
 
-app.get('/api/settings', auth, (_req, res) => {
-  res.json(Object.fromEntries(EDITABLE.map((k) => [k, config[k]])))
+app.get('/api/settings', auth, async (_req, res) => {
+  const prowlarr = config.torznabUrl ? null : await prowlarrStatus(config.torznabApiKey || undefined)
+  res.json({ ...Object.fromEntries(EDITABLE.map((k) => [k, config[k]])), prowlarr })
 })
 
 app.post('/api/settings', auth, (req, res) => {

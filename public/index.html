@@ -66,10 +66,10 @@
   <section class="panel hidden" id="settings">
     <strong>Settings</strong>
     <div class="full">
-      <label for="s_torznabUrl">Prowlarr / Jackett Torznab URL</label>
-      <input type="text" id="s_torznabUrl" placeholder="http://localhost:9696/1/api">
+      <label for="s_torznabUrl">Torznab URL (leave empty to use Prowlarr on this computer automatically)</label>
+      <input type="text" id="s_torznabUrl" placeholder="Automatic">
       <label for="s_torznabApiKey">Indexer API key</label>
-      <input type="password" id="s_torznabApiKey">
+      <input type="password" id="s_torznabApiKey" placeholder="Automatic">
     </div>
     <div class="grid">
       <div><label for="s_defaultTv">Default TV</label><select id="s_defaultTv"></select></div>
@@ -100,6 +100,7 @@
       <button class="primary" id="playBest">▶ Play best match</button>
       <button id="searchBtn">Show all results</button>
     </div>
+    <div class="small muted" id="source" style="margin-top:10px"></div>
   </section>
 
   <section class="panel hidden" id="now">
@@ -270,7 +271,16 @@ async function loadSettings () {
       if (el.type === 'checkbox') el.checked = settings[k]
       else el.value = settings[k] ?? ''
     }
-    if (!settings.torznabUrl) { openSettings(); toast('Add your Prowlarr or Jackett details to get started') }
+    const p = settings.prowlarr
+    if (settings.torznabUrl) {
+      $('source').textContent = 'Searching: ' + settings.torznabUrl
+    } else if (p && p.found && p.indexers.length) {
+      $('source').textContent = `Searching ${p.indexers.length} Prowlarr indexer${p.indexers.length > 1 ? 's' : ''}: ${p.indexers.join(', ')}`
+    } else if (p && p.found) {
+      $('source').textContent = 'Prowlarr is connected but has no indexers. In Prowlarr, click Indexers → Add Indexer.'
+    } else {
+      $('source').textContent = (p ? p.reason : 'No search source') + '. Install and start Prowlarr, or enter a Torznab URL in Settings.'
+    }
   } catch {}
 }
 

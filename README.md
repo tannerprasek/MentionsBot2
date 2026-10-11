@@ -14,7 +14,7 @@ Siri Shortcut ──POST /play──▶ CastBot server ──Torznab──▶ Pr
 1. Install [Node.js](https://nodejs.org/en/download) and [Prowlarr](https://prowlarr.com) on a computer that's on the same Wi-Fi as your TVs. In Prowlarr, add your indexers.
 2. Download this repo (green **Code** button → **Download ZIP**) and unzip it.
 3. Double-click **Start CastBot.command** (Mac) or **Start CastBot.bat** (Windows). Chrome opens the CastBot page.
-4. In **⚙ Settings**, paste the Prowlarr Torznab URL and API key, then click Save.
+4. CastBot finds Prowlarr on its own. The line under the search buttons lists the indexers it will search.
 5. Type a movie or show, pick a TV, and click **▶ Play best match**.
 
 On a Mac, the first time, right-click **Start CastBot.command** → **Open** if macOS blocks it.
@@ -37,7 +37,7 @@ curl -H "Authorization: Bearer $API_TOKEN" http://localhost:8787/devices   # lis
 ```
 
 Torznab URL:
-- **Prowlarr:** Indexers → (indexer) → copy the Torznab feed URL, e.g. `http://localhost:9696/1/api`. The API key is under Settings → General.
+- **Prowlarr:** nothing to enter: with the URL left empty, CastBot reads the API key from the local Prowlarr install and searches all of its indexers. To use a single indexer instead, paste its Torznab feed URL, e.g. `http://localhost:9696/1/api`.
 - **Jackett:** `http://localhost:9117/api/v2.0/indexers/all/results/torznab/api`. The API key is shown at the top of the dashboard.
 
 To keep it running, use `pm2 start src/server.js --name castbot` or a systemd/launchd service.
