@@ -1,5 +1,6 @@
 import ChromecastAPI from 'chromecast-api'
 import castv2 from 'castv2-client'
+import { bestTv } from './tvmatch.js'
 import mdns from 'multicast-dns'
 import dns from 'node:dns/promises'
 import net from 'node:net'
@@ -38,27 +39,33 @@ export function listDevices () {
   return client.devices.map((d) => ({ name: d.friendlyName, host: d.host }))
 }
 
-const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-
 export function findDevice (name) {
   const devices = client.devices
   if (!devices.length) return null
   if (!name) return devices[0]
-  const n = norm(name.replace(/\b(tv|the)\b/gi, ''))
-  return devices.find((d) => norm(d.friendlyName) === norm(name)) ||
-    devices.find((d) => norm(d.friendlyName).includes(n) || n.includes(norm(d.friendlyName))) ||
-    null
+  const i = bestTv(name, devices.map((d) => d.friendlyName))
+  return i === -1 ? null : devices[i]
 }
 
-export async function waitForDevice (name, timeoutMs = 8000) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Picks a TV for a request: the closest name match, else the default TV, else any TV found.
+// Waits the full timeout only while no TVs have been discovered at all.
+export async function pickDevice (requested, fallback, timeoutMs = 8000) {
   const start = Date.now()
   client.update()
+  let sawDevices = 0
   while (Date.now() - start < timeoutMs) {
-    const d = findDevice(name)
-    if (d) return d
-    await new Promise((r) => setTimeout(r, 500))
+    const d = findDevice(requested)
+    if (d) return { device: d, exact: true }
+    if (client.devices.length && !sawDevices) sawDevices = Date.now()
+    // Give late announcements 2s once some TVs are known, then fall back.
+    if (sawDevices && Date.now() - sawDevices > 2000) break
+    await sleep(300)
   }
-  return null
+  if (!client.devices.length) return { device: null }
+  const d = (fallback && fallback !== requested && findDevice(fallback)) || client.devices[0]
+  return { device: d, exact: false }
 }
 
 // chromecast-api is only used for discovery. Its connect/close path crashes on a failed

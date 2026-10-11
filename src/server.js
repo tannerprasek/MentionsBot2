@@ -7,7 +7,7 @@ import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
-import { listDevices, waitForDevice, play, stopCast, control } from './cast.js'
+import { listDevices, pickDevice, play, stopCast, control } from './cast.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -49,12 +49,8 @@ app.get('/stream/:name', (req, res) => {
   stream.pipe(res)
 })
 
-async function startPlayback (parsed, result, tvName) {
+async function startPlayback (parsed, result, device) {
   try {
-    setStatus({ state: 'finding-tv', title: parsed.title, release: result.title })
-    const device = await waitForDevice(tvName)
-    if (!device) throw new Error(`Chromecast "${tvName}" not found`)
-
     setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.friendlyName })
     const file = await startTorrent(await resolveTorrent(result.link), parsed)
     const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}`
@@ -108,15 +104,18 @@ app.post('/play', auth, async (req, res) => {
       }
       best = results[0]
     }
-    startPlayback(parsed, best, tvName)
-    res.json({
-      ok: true,
-      query: parsed.query,
-      release: best.title,
-      seeders: best.seeders,
-      tv: tvName || '(first found)',
-      speak: `Starting ${parsed.title} on ${tvName || 'your TV'}.`
-    })
+    const { device, exact } = await pickDevice(tvName, config.defaultTv)
+    if (!device) {
+      setStatus({ state: 'error', title: parsed.title, error: 'No TVs found on the network' })
+      return res.status(404).json({ error: 'no TVs found', speak: "I couldn't find any TVs on your network." })
+    }
+    const tv = device.friendlyName
+    const speak = !exact && tvName
+      ? `I couldn't find a TV called ${tvName}, so I'm playing ${parsed.title} on ${tv}.`
+      : `Starting ${parsed.title} on ${tv}.`
+    setStatus({ state: 'connecting', title: parsed.title, release: best.title, tv })
+    startPlayback(parsed, best, device)
+    res.json({ ok: true, query: parsed.query, release: best.title, seeders: best.seeders, tv, fallback: !exact, speak })
   } catch (err) {
     setStatus({ state: 'error', title: parsed.title, error: err.message })
     res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}` })
