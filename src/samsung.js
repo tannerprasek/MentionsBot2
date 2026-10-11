@@ -3,7 +3,10 @@
 import WebSocket from 'ws'
 import net from 'node:net'
 
-// Store IDs first, then the Tizen package IDs some firmware uses instead.
+// Names used to find the app in the TV's installed-app list.
+const APP_NAMES = { netflix: /netflix/i, disneyplus: /disney/i, appletvplus: /apple ?tv/i }
+
+// Fallback IDs: store IDs first, then the Tizen package IDs some firmware uses instead.
 const APPS = {
   netflix: ['3201907018807', '11101200001', 'RN1MCdNq8t.Netflix'],
   disneyplus: ['3201901017640', 'MCmYXNxgcu.DisneyPlus'],
@@ -58,10 +61,11 @@ function connect (ip, token, onToken) {
   const url = `wss://${ip}:8002/api/v2/channels/samsung.remote.control?name=${name}${token ? `&token=${token}` : ''}`
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, { rejectUnauthorized: false })
+    // Long enough to find the remote and press Allow on the first-time prompt.
     const timer = setTimeout(() => {
       ws.terminate()
       reject(new Error('The TV did not respond. If it showed an "Allow" prompt, accept it with the remote and try again.'))
-    }, 30_000)
+    }, token ? 15_000 : 120_000)
     ws.on('error', (err) => { clearTimeout(timer); reject(err) })
     ws.on('message', (raw) => {
       let msg
@@ -72,10 +76,30 @@ function connect (ip, token, onToken) {
       }
       if (msg.event === 'ms.channel.connect') {
         clearTimeout(timer)
-        if (msg.data?.token && msg.data.token !== token) onToken?.(msg.data.token)
+        if (msg.data?.token && msg.data.token !== token) {
+          log('paired; saving the TV\'s token')
+          onToken?.(msg.data.token)
+        }
         resolve(ws)
       }
     })
+  })
+}
+
+// Asks the TV for its installed apps (works on models that hide the REST app endpoints).
+function installedApps (ws) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { ws.off('message', onMsg); resolve(null) }, 5000)
+    function onMsg (raw) {
+      let msg
+      try { msg = JSON.parse(raw) } catch { return }
+      if (msg.event !== 'ed.installedApp.get') return
+      clearTimeout(timer)
+      ws.off('message', onMsg)
+      resolve([].concat(msg.data?.data || []).map((a) => ({ id: a.appId, name: a.name })))
+    }
+    ws.on('message', onMsg)
+    ws.send(JSON.stringify({ method: 'ms.channel.emit', params: { event: 'ed.installedApp.get', to: 'host' } }))
   })
 }
 
@@ -106,26 +130,29 @@ async function waitRunning (ip, appId) {
 }
 
 export async function openApp (ip, service, url, { token, onToken } = {}) {
-  const candidates = APPS[service]
-  if (!candidates) throw new Error(`No TV app known for ${service}`)
-
-  // Use the ID this TV recognises; if it won't tell us, try them all.
-  const states = await Promise.all(candidates.map((id) => appState(ip, id)))
-  let ids = candidates.filter((_, i) => states[i]?.installed)
-  if (!ids.length && states.every((s) => s && !s.installed)) throw new Error(`The ${service} app isn't installed on this TV`)
-  if (!ids.length) ids = candidates
-  log(`opening ${service} on ${ip} (app IDs to try: ${ids.join(', ')})`)
-
+  if (!APPS[service]) throw new Error(`No TV app known for ${service}`)
+  log(`opening ${service} on ${ip}${token ? '' : ' (first time: accept the Allow prompt on the TV)'}`)
   const ws = await connect(ip, token, onToken)
   try {
+    // Prefer the ID the TV itself reports for the app, then the known IDs.
+    const apps = await installedApps(ws)
+    if (apps) log(`TV reports ${apps.length} installed apps`)
+    const reported = (apps || []).filter((a) => APP_NAMES[service].test(a.name)).map((a) => a.id)
+    if (apps && !reported.length) log(`${service} not in the TV's app list: ${apps.map((a) => a.name).join(', ')}`)
+    const ids = [...new Set([...reported, ...APPS[service]])]
+    log(`app IDs to try: ${ids.join(', ')}`)
+
+    // Opening the app matters most; deep links (only reliable for Netflix) come after.
     const meta = deepLink(service, url)
     const attempts = []
     for (const id of ids) {
-      if (meta) attempts.push([`deep link ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK', meta), id])
+      if (service === 'netflix' && meta) attempts.push([`deep link ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK', meta), id])
       attempts.push([`launch ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK'), id])
       attempts.push([`native launch ${id}`, () => wsLaunch(ws, id, 'NATIVE_LAUNCH'), id])
-      attempts.push([`REST launch ${id}`, () => restLaunch(ip, id, meta), id])
+      attempts.push([`REST launch ${id}`, () => restLaunch(ip, id, service === 'netflix' ? meta : ''), id])
     }
+
+    let unverified = 0
     for (const [label, run, id] of attempts) {
       try {
         await run()
@@ -134,12 +161,20 @@ export async function openApp (ip, service, url, { token, onToken } = {}) {
         continue
       }
       const ok = await waitRunning(ip, id)
-      if (ok === null) { log(`${label}: sent (this TV doesn't report whether apps are running)`); return }
       if (ok) { log(`${label}: app is running`); return }
+      if (ok === null) {
+        // This TV won't say whether the app opened; send a few variants, then stop.
+        log(`${label}: sent (TV doesn't report running apps)`)
+        await sleep(1500)
+        if (++unverified >= 3) return
+        continue
+      }
       log(`${label}: app didn't open`)
     }
+    if (unverified) return
     throw new Error(`The TV didn't open ${service}. If the Frame is in Art Mode, switch it to TV mode and try again.`)
   } finally {
+    await sleep(500)
     try { ws.close() } catch {}
   }
 }
