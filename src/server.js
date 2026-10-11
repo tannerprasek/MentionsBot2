@@ -62,7 +62,7 @@ async function startPlayback (parsed, result, device) {
   try {
     setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.name })
     const file = await startTorrent(await resolveTorrent(result.link), parsed)
-    const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.kind === 'cast' ? '?cast=1' : ''}`
+    const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.ref ? '?cast=1' : ''}`
 
     await playOn(device, url, parsed.title, file.name)
     setStatus({ state: 'playing', title: parsed.title, release: result.title, file: file.name, tv: device.name })
@@ -182,7 +182,7 @@ app.post('/control/:action', auth, async (req, res) => {
 })
 
 app.get('/api/version', (_req, res) => res.json({ version }))
-app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind }) => ({ name, kind }))))
+app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind, ref }) => ({ name, kind, cast: Boolean(ref) }))))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
 
 app.listen(config.port, '0.0.0.0', () => {

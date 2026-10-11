@@ -167,12 +167,14 @@ const fmtSize = (b) => b ? (b / 1024 ** 3).toFixed(b > 1024 ** 3 * 10 ? 0 : 1) +
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 // TVs
+const KIND = { cast: 'Chromecast', roku: 'Roku', lg: 'LG' }
+const tvLabel = (d) => d.kind === 'cast' ? KIND.cast : KIND[d.kind] + (d.cast ? ' + Cast' : '')
 async function loadTvs () {
   try {
     const devices = await api('/devices')
     const saved = store.get('tv')
     const opts = devices.length
-      ? devices.map((d) => `<option ${d.name === saved ? 'selected' : ''}>${esc(d.name)}</option>`).join('')
+      ? devices.map((d) => `<option value="${esc(d.name)}" ${d.name === saved ? 'selected' : ''}>${esc(d.name)} · ${tvLabel(d)}</option>`).join('')
       : '<option value="">No TVs found yet</option>'
     $('tv').innerHTML = opts
     $('s_defaultTv').innerHTML = '<option value="">(first TV found)</option>' + devices.map((d) => `<option>${esc(d.name)}</option>`).join('')

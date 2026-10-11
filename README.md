@@ -86,7 +86,7 @@ Requests are parsed into queries: "season two episode 3" or "s2e3" becomes `S02E
 | Roku (TCL, Hisense, sticks) | Roku's "Play on Roku" channel | Roku apps |
 | LG webOS | DLNA (LG's media player) | LG apps |
 
-If a Roku refuses commands, set Settings → System → Advanced system settings → Control by mobile apps → Network access to **Permissive**. Roku has no exact seek, so ⟲ 30s uses Instant Replay and 30s ⟳ scrubs forward.
+A Roku or LG that also has Chromecast built in is listed once: torrents play over Google Cast (falling back to the Roku/LG player if Cast fails), and apps open through Roku/LG. If a Roku refuses commands, set Settings → System → Advanced system settings → Control by mobile apps → Network access to **Permissive**. Roku has no exact seek, so ⟲ 30s uses Instant Replay and 30s ⟳ scrubs forward.
 
 ## Streaming services first
 

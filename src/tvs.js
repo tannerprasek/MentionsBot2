@@ -15,14 +15,20 @@ const lgKeys = {
   set: (ip, key) => saveDeviceKey('lgKeys', ip, key)
 }
 
+// Each TV appears once. A TV reachable both natively (Roku/LG) and over Google Cast keeps both:
+// torrents play over Cast, apps open over the native protocol.
 export function listDevices () {
-  const seen = new Set()
-  const out = []
-  // An LG or Roku that also speaks Google Cast is listed once, under its own kind.
-  for (const d of lgDevices()) { seen.add(d.ip); out.push({ name: d.name, kind: 'lg', ip: d.ip }) }
-  for (const d of rokuDevices()) { seen.add(d.ip); out.push({ name: d.name, kind: 'roku', ip: d.ip }) }
-  for (const d of castDevices()) {
-    if (!seen.has(d.host)) out.push({ name: d.friendlyName, kind: 'cast', host: d.host, ref: d })
+  const natives = [
+    ...lgDevices().map((d) => ({ ...d, kind: 'lg' })),
+    ...rokuDevices().map((d) => ({ ...d, kind: 'roku' }))
+  ]
+  const casts = castDevices()
+  const out = natives.map((n) => {
+    const c = casts.find((x) => x.ip && x.ip === n.ip)
+    return { name: c ? c.friendlyName : n.name, names: c ? [c.friendlyName, n.name] : [n.name], kind: n.kind, ip: n.ip, ref: c }
+  })
+  for (const c of casts) {
+    if (!out.some((d) => d.ref === c)) out.push({ name: c.friendlyName, names: [c.friendlyName], kind: 'cast', host: c.host, ip: c.ip, ref: c })
   }
   return out
 }
@@ -31,8 +37,9 @@ export function findDevice (name) {
   const devices = listDevices()
   if (!devices.length) return null
   if (!name) return devices[0]
-  const i = bestTv(name, devices.map((d) => d.name))
-  return i === -1 ? null : devices[i]
+  const flat = devices.flatMap((d) => d.names.map((n) => ({ n, d })))
+  const i = bestTv(name, flat.map((x) => x.n))
+  return i === -1 ? null : flat[i].d
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -67,15 +74,26 @@ const formatOf = (file) => path.extname(file).slice(1).toLowerCase() || 'mp4'
 export async function playOn (device, url, title, fileName) {
   await stopPlayback()
   const ip = await deviceIp(device)
-  if (device.kind === 'cast') {
-    await castPlay(device.ref, url, title)
-  } else if (device.kind === 'roku') {
-    await rokuPlay(ip, url, title, formatOf(fileName))
-  } else if (device.kind === 'lg') {
-    if (hasRenderer(ip)) await dlnaPlay(ip, url, title, mimeOf(fileName))
-    else await lgPlay(ip, url, title, mimeOf(fileName), lgKeys)
+  if (device.ref) {
+    try {
+      await castPlay(device.ref, url, title)
+      active = { ...device, ip, via: 'cast' }
+      return
+    } catch (err) {
+      if (device.kind === 'cast') throw err
+      console.error(`[tv] Cast failed on ${device.name} (${err.message}); using ${device.kind} instead`)
+    }
   }
-  active = { ...device, ip }
+  // Native players get the file's real content type (the ?cast=1 flag forces video/mp4).
+  const nativeUrl = url.replace(/\?cast=1$/, '')
+  if (device.kind === 'roku') {
+    await rokuPlay(ip, nativeUrl, title, formatOf(fileName))
+  } else if (hasRenderer(ip)) {
+    await dlnaPlay(ip, nativeUrl, title, mimeOf(fileName))
+  } else {
+    await lgPlay(ip, nativeUrl, title, mimeOf(fileName), lgKeys)
+  }
+  active = { ...device, ip, via: device.kind }
 }
 
 // Opens a streaming service's app on the TV. Throws when this TV can't be told to.
@@ -99,12 +117,12 @@ export async function stopPlayback () {
   const a = active
   active = null
   if (!a) return
-  if (a.kind === 'cast') return stopCast()
+  if (a.via === 'cast') return stopCast()
   await control(a, 'stop').catch(() => {})
 }
 
 function control (a, action, value) {
-  if (a.kind === 'cast') return castControl(action, value)
+  if (a.via === 'cast') return castControl(action, value)
   if (a.kind === 'roku') return rokuControl(a.ip, action, value)
   if (hasRenderer(a.ip)) return dlnaControl(a.ip, action, value)
   return lgControl(a.ip, action, value, lgKeys)
