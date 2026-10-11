@@ -47,12 +47,12 @@ To keep it running, use `pm2 start src/server.js --name castbot` or a systemd/la
 Open the Shortcuts app on your iPhone, create a new shortcut, and name it **CastBot**. The name is what you say to Siri.
 
 1. **Ask for Input** (Text). Prompt: "What do you want to watch?"
-2. **Choose from Menu**. Prompt: "Which TV?" Add one item per TV, using the names from `/devices` (e.g. "Living Room TV", "Bedroom TV"). Inside each item, add a **Text** action containing that TV's name.
+2. **Get Contents of URL**: `http://<server-lan-ip>:8787/tvs` (returns the TVs CastBot can see), then **Choose from List** with Prompt "Which TV?". Use **Chosen Item** as `tv` below.
 3. **Get Contents of URL**
    - URL: `http://<server-lan-ip>:8787/play`
    - Method: `POST`
    - Headers: `Authorization` = `Bearer <your API_TOKEN>`
-   - Request Body: JSON, with `title` = *Provided Input* and `tv` = *Menu Result*
+   - Request Body: JSON, with `title` = *Provided Input* and `tv` = *Chosen Item*
 4. **Get Dictionary Value**: key `speak` from *Contents of URL*
 5. **Speak Text**: *Dictionary Value*
 
