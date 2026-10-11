@@ -8,7 +8,7 @@ import { startTorrent, stopTorrent, currentFile, stats, clearDownloads } from '.
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
-import { listDevices, pickDevice, onPlaybackFinished, playOn, openAppOn, canOpenApps, stopPlayback, controlActive } from './tvs.js'
+import { listDevices, pickDevice, onPlaybackFinished, playOn, stopPlayback, controlActive } from './tvs.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -96,51 +96,18 @@ async function startPlayback (parsed, result, device) {
   }
 }
 
-// If the title is on one of the user's services, open that app on the TV instead of torrenting.
+// If the title is on one of the user's services, say where instead of torrenting.
 // Returns true when it has sent the response.
-async function tryStreaming (parsed, tvName, res) {
+async function tryStreaming (parsed, res) {
   setStatus({ state: 'searching', title: parsed.title })
   const hit = await findStreaming(parsed, config.streamingServices, config.streamingCountry).catch((err) => {
     console.error('[streaming]', err.message)
     return null
   })
   if (!hit) return false
-
-  const { device } = await pickDevice(tvName, config.defaultTv)
-  const canOpen = device && await canOpenApps(device)
-  console.log(`[streaming] ${hit.title} is on ${hit.serviceName}; TV: ${device ? `${device.name} (${device.kind})` : 'none'}; can open apps: ${Boolean(canOpen)}`)
-  if (!canOpen) {
-    setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url })
-    res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}. Open it in the ${hit.serviceName} app.` })
-    return true
-  }
-
-  const tv = device.name
-  await stopPlayback().catch(() => {})
-  await stopTorrent()
-  // Only Netflix accepts "open this title" from outside; for the rest CastBot opens the app.
-  const deepLinkable = hit.service === 'netflix'
-  const yourself = `Search for ${hit.title} yourself.`
-  setStatus({ state: 'opening-app', title: hit.title, service: hit.serviceName, tv, url: hit.url })
-  res.json({
-    ok: true,
-    streaming: hit,
-    tv,
-    speak: deepLinkable
-      ? `${hit.title} is on Netflix. Opening it on ${tv}.`
-      : `${hit.title} is on ${hit.serviceName}. Opening ${hit.serviceName} on ${tv}. ${yourself}`
-  })
-
-  openAppOn(device, hit.service, hit.url, hit.isSeries)
-    .then((r) => setStatus({
-      state: 'streaming',
-      title: hit.title,
-      service: hit.serviceName,
-      tv,
-      url: hit.url,
-      note: r?.deep ? `Opened ${hit.title} in ${hit.serviceName}.` : `${hit.serviceName} is open. ${yourself}`
-    }))
-    .catch((err) => setStatus({ state: 'error', title: hit.title, error: `Couldn't open ${hit.serviceName}: ${err.message}` }))
+  console.log(`[streaming] ${hit.title} is on ${hit.serviceName}`)
+  setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url, note: `Watch it in the ${hit.serviceName} app.` })
+  res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}.` })
   return true
 }
 
@@ -174,7 +141,7 @@ app.post('/play', auth, async (req, res) => {
   const parsed = parseRequest(text)
   try {
     if (!req.body?.link && !parsed.force && !req.body?.force) {
-      const handled = await tryStreaming(parsed, tvName, res)
+      const handled = await tryStreaming(parsed, res)
       if (handled) return
     }
 

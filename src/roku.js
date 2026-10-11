@@ -34,40 +34,6 @@ export function rokuPlay (ip, url, title, format) {
   return ecp(ip, `/input/15985?${q}`)
 }
 
-const APPS = { netflix: '12', disneyplus: '291097', appletvplus: '551012' }
-
-function deepLink (service, url, isSeries) {
-  const mediaType = isSeries ? 'series' : 'movie'
-  if (service === 'netflix') {
-    const id = url.match(/title\/(\d+)/)?.[1]
-    return id ? { contentId: id, mediaType } : {}
-  }
-  if (service === 'disneyplus') {
-    const id = url.match(/entity-([0-9a-f-]+)/)?.[1]
-    return id ? { contentId: `entity-${id}`, mediaType } : {}
-  }
-  if (service === 'appletvplus') {
-    const id = url.match(/(umc\.cmc\.[a-z0-9]+)/)?.[1]
-    return id ? { contentId: id, mediaType } : {}
-  }
-  return {}
-}
-
-export async function rokuOpenApp (ip, service, url, isSeries, profile) {
-  const app = APPS[service]
-  if (!app) throw new Error(`No Roku app known for ${service}`)
-  await ecp(ip, `/launch/${app}?${new URLSearchParams(deepLink(service, url, isSeries))}`)
-  // Netflix documents Roku content IDs; the others only open the app.
-  const result = { deep: service === 'netflix' }
-  if (!profile) return result
-  // Same profile-screen navigation as on Samsung: first profile, then right, then OK.
-  await new Promise((r) => setTimeout(r, 8000))
-  for (let i = 0; i < 6; i++) await ecp(ip, '/keypress/Left')
-  for (let i = 1; i < profile; i++) await ecp(ip, '/keypress/Right')
-  await ecp(ip, '/keypress/Select')
-  return result
-}
-
 const KEYS = { pause: 'Play', resume: 'Play', stop: 'Home' }
 
 export async function rokuControl (ip, action, value) {

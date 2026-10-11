@@ -29,12 +29,9 @@ export const config = {
   avoidHevc: bool(process.env.AVOID_HEVC, true),
   maxSizeGb: Number(process.env.MAX_SIZE_GB || 15),
   minSeeders: Number(process.env.MIN_SEEDERS || 3),
-  // Services checked before torrenting; matching titles open in the TV's app instead.
+  // Services checked before torrenting; if the title is on one, CastBot says so instead of torrenting.
   streamingServices: (process.env.STREAMING_SERVICES ?? 'netflix,disneyplus,appletvplus').split(',').filter(Boolean),
   streamingCountry: process.env.STREAMING_COUNTRY || 'US',
-  // Profile to select on each app's "Who's watching?" screen: 1 = first, 0 = don't pick.
-  netflixProfile: 1,
-  disneyProfile: 1,
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
   samsungTokens: {},
   // Pairing keys LG TVs hand out after you accept the prompt, keyed by TV IP.
@@ -42,7 +39,7 @@ export const config = {
 }
 
 // Settings saved from the web page; these override .env.
-export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry', 'netflixProfile', 'disneyProfile']
+export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry']
 const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
 
 try {

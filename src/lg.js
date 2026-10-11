@@ -1,4 +1,4 @@
-// LG webOS TVs: discovery via SSDP, app launching over LG's SSAP remote API (lgtv2).
+// LG webOS TVs: discovery via SSDP, playback/remote control over LG's SSAP API (lgtv2).
 import LGTV from 'lgtv2'
 import { XMLParser } from 'fast-xml-parser'
 import { onSsdp } from './ssdp.js'
@@ -46,22 +46,6 @@ function connect (ip, clientKey, saveKey) {
 }
 
 const request = (tv, uri, payload) => new Promise((resolve, reject) => tv.request(uri, payload, (err, res) => (err ? reject(err) : resolve(res))))
-
-const APPS = { netflix: 'netflix', disneyplus: 'com.disney.disneyplus-prod', appletvplus: 'com.apple.appletv' }
-
-function contentId (service, url) {
-  if (service === 'netflix') {
-    const id = url.match(/title\/(\d+)/)?.[1]
-    return id ? `m=https://www.netflix.com/title/${id}&source_type=4` : undefined
-  }
-  return url
-}
-
-export async function lgOpenApp (ip, service, url, keys) {
-  const tv = await connect(ip, keys.get(ip), (k) => keys.set(ip, k))
-  await request(tv, 'ssap://system.launcher/launch', { id: APPS[service], contentId: contentId(service, url) })
-  return { deep: service === 'netflix' }
-}
 
 // Fallback player when the TV has no DLNA renderer.
 export async function lgPlay (ip, url, title, mime, keys) {

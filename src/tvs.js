@@ -1,13 +1,13 @@
 // One list of every TV CastBot can drive (Chromecast / Google Cast, Roku, LG webOS),
-// with name matching, playback, app launching and remote control routed to the right protocol.
+// with name matching, playback and remote control routed to the right protocol.
 import path from 'node:path'
 import { config, saveDeviceKey } from './config.js'
 import { bestTv } from './tvmatch.js'
 import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, stopCast, control as castControl } from './cast.js'
-import { rokuDevices, rokuPlay, rokuOpenApp, rokuControl } from './roku.js'
-import { lgDevices, lgPlay, lgOpenApp, lgControl } from './lg.js'
+import { rokuDevices, rokuPlay, rokuControl } from './roku.js'
+import { lgDevices, lgPlay, lgControl } from './lg.js'
 import { hasRenderer, dlnaPlay, dlnaControl } from './dlna.js'
-import { isSamsung, exitArtMode, openApp as samsungOpenApp } from './samsung.js'
+import { isSamsung, exitArtMode } from './samsung.js'
 import { searchSsdp } from './ssdp.js'
 
 export const onPlaybackFinished = (fn) => onCastFinished(() => { active = null; fn() })
@@ -18,7 +18,7 @@ const lgKeys = {
 }
 
 // Each TV appears once. A TV reachable both natively (Roku/LG) and over Google Cast keeps both:
-// torrents play over Cast, apps open over the native protocol.
+// torrents play over Cast, falling back to the native player.
 export function listDevices () {
   const natives = [
     ...lgDevices().map((d) => ({ ...d, kind: 'lg' })),
@@ -102,26 +102,6 @@ export async function playOn (device, url, title, fileName) {
 }
 
 // Opens a streaming service's app on the TV. Throws when this TV can't be told to.
-// Which profile to pick on the app's "Who's watching?" screen (0 = don't pick).
-const profileFor = (service) => ({ netflix: config.netflixProfile, disneyplus: config.disneyProfile }[service] || 0)
-
-export async function openAppOn (device, service, url, isSeries) {
-  const ip = await deviceIp(device)
-  const profile = profileFor(service)
-  if (device.kind === 'roku') return rokuOpenApp(ip, service, url, isSeries, profile)
-  if (device.kind === 'lg') return lgOpenApp(ip, service, url, lgKeys)
-  if (await isSamsung(ip)) {
-    return samsungOpenApp(ip, service, url, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t), profile })
-  }
-  throw new Error(`CastBot can't open apps on ${device.name}`)
-}
-
-export async function canOpenApps (device) {
-  if (device.kind !== 'cast') return true
-  const ip = await deviceIp(device).catch(() => null)
-  return Boolean(ip && await isSamsung(ip))
-}
-
 export async function stopPlayback () {
   const a = active
   active = null
