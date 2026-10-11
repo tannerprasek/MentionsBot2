@@ -10,6 +10,13 @@ import { hasRenderer, dlnaPlay, dlnaControl } from './dlna.js'
 import { isSamsung, exitArtMode } from './samsung.js'
 import { searchSsdp } from './ssdp.js'
 
+// Look for TVs every 30 seconds, so one that was just switched on shows up without a restart.
+export function refreshTvs () {
+  refreshCast()
+  searchSsdp()
+}
+setInterval(refreshTvs, 30_000).unref()
+
 export const onPlaybackFinished = (fn) => onCastFinished(() => { active = null; fn() })
 
 const lgKeys = {

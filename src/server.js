@@ -8,7 +8,7 @@ import { startTorrent, stopTorrent, currentFile, stats, clearDownloads } from '.
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
-import { listDevices, pickDevice, onPlaybackFinished, playOn, stopPlayback, controlActive } from './tvs.js'
+import { listDevices, refreshTvs, pickDevice, onPlaybackFinished, playOn, stopPlayback, controlActive } from './tvs.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -193,7 +193,12 @@ app.post('/control/:action', auth, async (req, res) => {
 
 app.get('/api/version', (_req, res) => res.json({ version }))
 // Plain list of TV names, for the Siri Shortcut's "Choose from List".
-app.get('/tvs', auth, (_req, res) => res.json(listDevices().map((d) => d.name)))
+app.get('/tvs', auth, async (_req, res) => {
+  // Search again first, so a TV switched on a moment ago is in the list.
+  refreshTvs()
+  await new Promise((r) => setTimeout(r, 1500))
+  res.json(listDevices().map((d) => d.name))
+})
 app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind, ref }) => ({ name, kind, cast: Boolean(ref) }))))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
 

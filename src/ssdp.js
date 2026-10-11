@@ -27,4 +27,3 @@ export function searchSsdp () {
 }
 
 searchSsdp()
-setInterval(searchSsdp, 60_000).unref()

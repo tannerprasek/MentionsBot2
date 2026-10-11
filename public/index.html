@@ -323,6 +323,7 @@ $('saveSettings').onclick = async () => {
 
 fetch('/api/version').then((r) => r.json()).then((v) => { $('ver').textContent = 'v' + v.version }).catch(() => {})
 loadSettings().then(loadTvs)
+setInterval(loadTvs, 30_000)
 poll()
 </script>
 </body>
