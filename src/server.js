@@ -107,7 +107,9 @@ async function tryStreaming (parsed, tvName, res) {
   if (!hit) return false
 
   const { device } = await pickDevice(tvName, config.defaultTv)
-  if (!device || !(await canOpenApps(device))) {
+  const canOpen = device && await canOpenApps(device)
+  console.log(`[streaming] ${hit.title} is on ${hit.serviceName}; TV: ${device ? `${device.name} (${device.kind})` : 'none'}; can open apps: ${Boolean(canOpen)}`)
+  if (!canOpen) {
     setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url })
     res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}. Open it in the ${hit.serviceName} app.` })
     return true
