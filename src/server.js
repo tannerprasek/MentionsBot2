@@ -1,15 +1,14 @@
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { config, EDITABLE, saveSettings, saveSamsungToken } from './config.js'
+import { config, EDITABLE, saveSettings } from './config.js'
 import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
-import { isSamsung, openApp } from './samsung.js'
-import { listDevices, pickDevice, resolveHost, play, stopCast, control } from './cast.js'
+import { listDevices, pickDevice, playOn, openAppOn, canOpenApps, stopPlayback, controlActive } from './tvs.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -33,7 +32,15 @@ app.get('/stream/:name', (req, res) => {
   if (!file) return res.sendStatus(404)
   const size = file.length
   const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/)
-  res.set({ 'Accept-Ranges': 'bytes', 'Content-Type': 'video/mp4', 'Access-Control-Allow-Origin': '*' })
+  // Chromecast is told the file is MP4 (it plays H.264 MKVs that way); DLNA/Roku players get the real type.
+  const type = req.query.cast || /\.mp4$/i.test(file.name) ? 'video/mp4' : /\.mkv$/i.test(file.name) ? 'video/x-matroska' : 'video/mp4'
+  res.set({
+    'Accept-Ranges': 'bytes',
+    'Content-Type': type,
+    'Access-Control-Allow-Origin': '*',
+    'transferMode.dlna.org': 'Streaming',
+    'contentFeatures.dlna.org': 'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000'
+  })
   if (req.method === 'HEAD') return res.set('Content-Length', size).end()
 
   let start = 0
@@ -53,12 +60,12 @@ app.get('/stream/:name', (req, res) => {
 
 async function startPlayback (parsed, result, device) {
   try {
-    setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.friendlyName })
+    setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.name })
     const file = await startTorrent(await resolveTorrent(result.link), parsed)
-    const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}`
+    const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.kind === 'cast' ? '?cast=1' : ''}`
 
-    await play(device, url, parsed.title)
-    setStatus({ state: 'playing', title: parsed.title, release: result.title, file: file.name, tv: device.friendlyName })
+    await playOn(device, url, parsed.title, file.name)
+    setStatus({ state: 'playing', title: parsed.title, release: result.title, file: file.name, tv: device.name })
   } catch (err) {
     console.error(err.stack)
     setStatus({ state: 'error', title: parsed.title, error: err.message })
@@ -76,20 +83,19 @@ async function tryStreaming (parsed, tvName, res) {
   if (!hit) return false
 
   const { device } = await pickDevice(tvName, config.defaultTv)
-  const ip = device && await resolveHost(device.host).catch(() => null)
-  if (!ip || !(await isSamsung(ip))) {
+  if (!device || !(await canOpenApps(device))) {
     setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url })
     res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}. Open it in the ${hit.serviceName} app.` })
     return true
   }
 
-  const tv = device.friendlyName
-  await stopCast().catch(() => {})
+  const tv = device.name
+  await stopPlayback().catch(() => {})
   await stopTorrent()
   setStatus({ state: 'opening-app', title: hit.title, service: hit.serviceName, tv, url: hit.url })
   res.json({ ok: true, streaming: hit, tv, speak: `${hit.title} is on ${hit.serviceName}. Opening it on ${tv}.` })
 
-  openApp(ip, hit.service, hit.url, { token: config.samsungTokens[ip], onToken: (t) => saveSamsungToken(ip, t) })
+  openAppOn(device, hit.service, hit.url, hit.isSeries)
     .then(() => setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, tv, url: hit.url }))
     .catch((err) => setStatus({ state: 'error', title: hit.title, error: `Couldn't open ${hit.serviceName}: ${err.message}` }))
   return true
@@ -146,7 +152,7 @@ app.post('/play', auth, async (req, res) => {
       setStatus({ state: 'error', title: parsed.title, error: 'No TVs found on the network' })
       return res.status(404).json({ error: 'no TVs found', speak: "I couldn't find any TVs on your network." })
     }
-    const tv = device.friendlyName
+    const tv = device.name
     const speak = !exact && tvName
       ? `I couldn't find a TV called ${tvName}, so I'm playing ${parsed.title} on ${tv}.`
       : `Starting ${parsed.title} on ${tv}.`
@@ -160,7 +166,7 @@ app.post('/play', auth, async (req, res) => {
 })
 
 app.post('/stop', auth, async (_req, res) => {
-  await stopCast().catch(() => {})
+  await stopPlayback().catch(() => {})
   await stopTorrent()
   setStatus({ state: 'idle' })
   res.json({ ok: true, speak: 'Stopped.' })
@@ -168,7 +174,7 @@ app.post('/stop', auth, async (_req, res) => {
 
 app.post('/control/:action', auth, async (req, res) => {
   try {
-    await control(req.params.action, req.body?.value ?? req.query.value)
+    await controlActive(req.params.action, req.body?.value ?? req.query.value)
     res.json({ ok: true, speak: 'Done.' })
   } catch (err) {
     res.status(400).json({ error: err.message, speak: err.message })
@@ -176,7 +182,7 @@ app.post('/control/:action', auth, async (req, res) => {
 })
 
 app.get('/api/version', (_req, res) => res.json({ version }))
-app.get('/devices', auth, (_req, res) => res.json(listDevices()))
+app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind }) => ({ name, kind }))))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
 
 app.listen(config.port, '0.0.0.0', () => {

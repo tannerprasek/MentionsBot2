@@ -43,7 +43,7 @@ export async function findStreaming (req, enabled, country = 'US') {
     const svc = SERVICES[key]
     if (!svc) continue
     const offer = node.offers.find((o) => o.monetizationType === 'FLATRATE' && svc.packages.includes(o.package.technicalName))
-    if (offer) return { service: key, serviceName: svc.name, url: offer.standardWebURL, title: node.content.title }
+    if (offer) return { service: key, serviceName: svc.name, url: offer.standardWebURL, title: node.content.title, isSeries: node.objectType === 'SHOW' }
   }
   return null
 }

@@ -1,6 +1,5 @@
 import ChromecastAPI from 'chromecast-api'
 import castv2 from 'castv2-client'
-import { bestTv } from './tvmatch.js'
 import mdns from 'multicast-dns'
 import dns from 'node:dns/promises'
 import net from 'node:net'
@@ -35,38 +34,8 @@ export async function resolveHost (host) {
   }
 }
 
-export function listDevices () {
-  return client.devices.map((d) => ({ name: d.friendlyName, host: d.host }))
-}
-
-export function findDevice (name) {
-  const devices = client.devices
-  if (!devices.length) return null
-  if (!name) return devices[0]
-  const i = bestTv(name, devices.map((d) => d.friendlyName))
-  return i === -1 ? null : devices[i]
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-
-// Picks a TV for a request: the closest name match, else the default TV, else any TV found.
-// Waits the full timeout only while no TVs have been discovered at all.
-export async function pickDevice (requested, fallback, timeoutMs = 8000) {
-  const start = Date.now()
-  client.update()
-  let sawDevices = 0
-  while (Date.now() - start < timeoutMs) {
-    const d = findDevice(requested)
-    if (d) return { device: d, exact: true }
-    if (client.devices.length && !sawDevices) sawDevices = Date.now()
-    // Give late announcements 2s once some TVs are known, then fall back.
-    if (sawDevices && Date.now() - sawDevices > 2000) break
-    await sleep(300)
-  }
-  if (!client.devices.length) return { device: null }
-  const d = (fallback && fallback !== requested && findDevice(fallback)) || client.devices[0]
-  return { device: d, exact: false }
-}
+export const castDevices = () => client.devices
+export const refreshCast = () => client.update()
 
 // chromecast-api is only used for discovery. Its connect/close path crashes on a failed
 // connection and hides the real error, so the cast session is driven with castv2-client here.

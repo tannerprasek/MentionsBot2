@@ -78,11 +78,21 @@ All endpoints except `/stream` need `Authorization: Bearer <API_TOKEN>` (or `?to
 
 Requests are parsed into queries: "season two episode 3" or "s2e3" becomes `S02E03`, and "season 1" becomes `S01` (a season pack; the matching episode file is chosen when an episode is given).
 
+## Supported TVs
+
+| TV | Torrent playback | Opens Netflix / Disney+ / Apple TV |
+|---|---|---|
+| Chromecast / Google TV / Google Cast TVs | Google Cast | Samsung only |
+| Roku (TCL, Hisense, sticks) | Roku's "Play on Roku" channel | Roku apps |
+| LG webOS | DLNA (LG's media player) | LG apps |
+
+If a Roku refuses commands, set Settings → System → Advanced system settings → Control by mobile apps → Network access to **Permissive**. Roku has no exact seek, so ⟲ 30s uses Instant Replay and 30s ⟳ scrubs forward.
+
 ## Streaming services first
 
 Before searching torrents, CastBot checks JustWatch's catalog for whether the title is on Netflix, Disney+ or Apple TV+ (choose which in Settings). If it is:
 
-- **Samsung TVs:** CastBot opens that service's app on the TV. The first time, the TV shows an **Allow** prompt for CastBot; accept it once. CastBot asks the app to go straight to the title, but some apps only open their home screen.
+- **Samsung, LG and Roku TVs:** CastBot opens that service's app on the TV. The first time, Samsung and LG TVs show an **Allow** prompt for CastBot; accept it once. CastBot asks the app to go straight to the title, but some apps only open their home screen.
 - **Other TVs:** Siri and the page tell you which service has it.
 
 To torrent anyway, click **Play via torrent instead**, or start the request with "torrent", e.g. "torrent Stranger Things".

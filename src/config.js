@@ -33,12 +33,14 @@ export const config = {
   streamingServices: (process.env.STREAMING_SERVICES ?? 'netflix,disneyplus,appletvplus').split(',').filter(Boolean),
   streamingCountry: process.env.STREAMING_COUNTRY || 'US',
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
-  samsungTokens: {}
+  samsungTokens: {},
+  // Pairing keys LG TVs hand out after you accept the prompt, keyed by TV IP.
+  lgKeys: {}
 }
 
 // Settings saved from the web page; these override .env.
 export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry']
-const SAVED = [...EDITABLE, 'samsungTokens']
+const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
 
 try {
   Object.assign(config, JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')))
@@ -57,8 +59,8 @@ export function saveSettings (input) {
   writeSettings()
 }
 
-export function saveSamsungToken (ip, token) {
-  config.samsungTokens = { ...config.samsungTokens, [ip]: token }
+export function saveDeviceKey (store, ip, key) {
+  config[store] = { ...config[store], [ip]: key }
   writeSettings()
 }
 
