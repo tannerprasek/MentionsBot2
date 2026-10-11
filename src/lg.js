@@ -25,11 +25,19 @@ export const lgDevices = () => [...devices.values()].filter((d) => !d.pending)
 // The first connection shows a pairing prompt on the TV; the key it returns is saved via saveKey.
 function connect (ip, clientKey, saveKey) {
   if (connections.has(ip)) return connections.get(ip)
+  if (!clientKey) console.log(`[lg] pairing with ${ip}: press Allow on the TV`)
   const p = new Promise((resolve, reject) => {
     const tv = LGTV({ host: ip, clientKey: clientKey || undefined, saveKey: (key, cb) => { saveKey(key); cb?.() }, reconnect: 0, timeout: 20_000 })
     const timer = setTimeout(() => { tv.disconnect(); reject(new Error('The LG TV did not respond. If it showed a pairing prompt, accept it and try again.')) }, 60_000)
     tv.on('connect', () => { clearTimeout(timer); resolve(tv) })
-    tv.on('error', (err) => { clearTimeout(timer); reject(err) })
+    tv.on('error', (err) => {
+      clearTimeout(timer)
+      tv.disconnect()
+      if (/reject/i.test(err.message)) {
+        return reject(new Error('The LG pairing prompt was declined or timed out. Try again and press Allow on the TV within 30 seconds. No prompt? On the LG: Settings → General → Devices → External Devices → LG Connect Apps → On.'))
+      }
+      reject(err)
+    })
     tv.on('close', () => connections.delete(ip))
   })
   p.catch(() => connections.delete(ip))
