@@ -76,7 +76,7 @@ const streamUrl = (file, device) =>
   `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.ref ? '?cast=1' : ''}`
 
 // Plays a torrent search result (or a file already downloading) on a TV.
-export async function start ({ parsed, result, device, resume, file: readyFile }) {
+export async function start ({ parsed, result, results, device, resume, file: readyFile }) {
   const tv = device.name
   const base = { title: parsed.title, release: result?.title, tv }
   if (now) last = now
@@ -84,7 +84,20 @@ export async function start ({ parsed, result, device, resume, file: readyFile }
   progressInfo = null
   try {
     statusFn({ state: 'connecting', ...base })
-    const file = readyFile || await startTorrent(await resolveTorrent(result.link), parsed)
+    // Try the top results in turn when one turns out not to contain the requested episode.
+    let file = readyFile
+    const candidates = results?.length ? results.slice(0, 3) : [result]
+    for (const r of readyFile ? [] : candidates) {
+      try {
+        file = await startTorrent(await resolveTorrent(r.link), parsed)
+        result = r
+        base.release = r.title
+        break
+      } catch (err) {
+        if (!err.wrongEpisode || r === candidates[candidates.length - 1]) throw err
+        log(`skipping ${r.title}: ${err.message}`)
+      }
+    }
     const ep = episodeOf(file.name)
     const season = parsed.season || ep?.season
     const episode = parsed.episode || ep?.episode
@@ -151,7 +164,7 @@ export async function playNext (prev = lastPlayed()) {
     const results = await search(parsed).catch(() => [])
     if (results.length) {
       log(`next: ${label} → ${results[0].title}`)
-      start({ ...opts, result: results[0] })
+      start({ ...opts, result: results[0], results })
       return { ok: true, speak }
     }
   }

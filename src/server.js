@@ -129,11 +129,12 @@ app.post('/play', auth, async (req, res) => {
     const { parsed: planned, resume } = player.plan(parsed)
 
     let best
+    let results
     if (req.body?.link) {
       best = { title: req.body.release || planned.title, link: req.body.link, seeders: req.body.seeders }
     } else {
       setStatus({ state: 'searching', title: planned.title })
-      const results = await search(planned)
+      results = await search(planned)
       if (!results.length) {
         setStatus({ state: 'error', title: planned.title, error: 'no results' })
         return res.status(404).json({ error: 'no results', speak: `I couldn't find ${planned.query}.` })
@@ -153,7 +154,7 @@ app.post('/play', auth, async (req, res) => {
       `${planned.continued ? 'Continuing' : 'Starting'} ${label} on ${tv}${resumeText}.`
     setStatus({ state: 'connecting', title: planned.title, release: best.title, tv })
     lastServed = Date.now()
-    player.start({ parsed: planned, result: best, device, resume: resume || undefined })
+    player.start({ parsed: planned, result: best, results, device, resume: resume || undefined })
     res.json({ ok: true, query: planned.query, release: best.title, seeders: best.seeders, tv, fallback: !exact, speak })
   } catch (err) {
     setStatus({ state: 'error', title: parsed.title, error: err.message })

@@ -102,6 +102,13 @@ export async function startTorrent (torrentId, req, timeoutMs = 90_000) {
     removeAndDelete(t).catch(() => {})
     throw new Error('No playable video file in torrent')
   }
+  // A multi-episode torrent without the requested episode would play the wrong one.
+  if (req.episode && !isEpisode(file, req) && t.files.filter(isVideo).length > 1) {
+    removeAndDelete(t).catch(() => {})
+    const err = new Error(`That torrent doesn't contain season ${req.season} episode ${req.episode}`)
+    err.wrongEpisode = true
+    throw err
+  }
   file.select()
   current = { torrent: t, file }
   return file
