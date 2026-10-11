@@ -3,10 +3,10 @@
 import path from 'node:path'
 import { config, saveDeviceKey } from './config.js'
 import { bestTv } from './tvmatch.js'
-import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, stopCast, control as castControl } from './cast.js'
-import { rokuDevices, rokuPlay, rokuControl } from './roku.js'
+import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, castProgress, stopCast, control as castControl } from './cast.js'
+import { rokuDevices, rokuPlay, rokuProgress, rokuControl } from './roku.js'
 import { lgDevices, lgPlay, lgControl } from './lg.js'
-import { hasRenderer, dlnaPlay, dlnaControl } from './dlna.js'
+import { hasRenderer, dlnaPlay, dlnaProgress, dlnaControl } from './dlna.js'
 import { isSamsung, exitArtMode } from './samsung.js'
 import { searchSsdp } from './ssdp.js'
 
@@ -80,7 +80,13 @@ let active = null // the device currently playing a CastBot stream
 const mimeOf = (file) => (/\.mkv$/i.test(file) ? 'video/x-matroska' : /\.webm$/i.test(file) ? 'video/webm' : 'video/mp4')
 const formatOf = (file) => path.extname(file).slice(1).toLowerCase() || 'mp4'
 
-export async function playOn (device, url, title, fileName) {
+// Chromecast and DLNA (LG) can start partway in; Roku's "Play on Roku" can't.
+export async function canResume (device) {
+  if (device.ref) return true
+  return device.kind === 'lg' && hasRenderer(await deviceIp(device))
+}
+
+export async function playOn (device, url, title, fileName, startAt = 0) {
   await stopPlayback()
   const ip = await deviceIp(device)
   if (device.ref) {
@@ -88,7 +94,7 @@ export async function playOn (device, url, title, fileName) {
       await exitArtMode(ip, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) }).catch(() => {})
     }
     try {
-      await castPlay(device.ref, url, title)
+      await castPlay(device.ref, url, title, startAt)
       active = { ...device, ip, via: 'cast' }
       return
     } catch (err) {
@@ -101,7 +107,7 @@ export async function playOn (device, url, title, fileName) {
   if (device.kind === 'roku') {
     await rokuPlay(ip, nativeUrl, title, formatOf(fileName))
   } else if (hasRenderer(ip)) {
-    await dlnaPlay(ip, nativeUrl, title, mimeOf(fileName))
+    await dlnaPlay(ip, nativeUrl, title, mimeOf(fileName), startAt)
   } else {
     await lgPlay(ip, nativeUrl, title, mimeOf(fileName), lgKeys)
   }
@@ -122,6 +128,16 @@ function control (a, action, value) {
   if (a.kind === 'roku') return rokuControl(a.ip, action, value)
   if (hasRenderer(a.ip)) return dlnaControl(a.ip, action, value)
   return lgControl(a.ip, action, value, lgKeys)
+}
+
+// Where the TV is in the video: { position, duration, state } in seconds, or null.
+export async function progress () {
+  const a = active
+  if (!a) return null
+  if (a.via === 'cast') return castProgress()
+  if (a.kind === 'roku') return rokuProgress(a.ip)
+  if (hasRenderer(a.ip)) return dlnaProgress(a.ip)
+  return null
 }
 
 export function controlActive (action, value) {

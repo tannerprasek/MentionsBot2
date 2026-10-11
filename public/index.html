@@ -80,6 +80,7 @@
     </div>
     <label class="check"><input type="checkbox" id="s_avoidHevc"> Skip HEVC / x265 (most Chromecasts can't play it)</label>
     <label class="check"><input type="checkbox" id="s_allow4k"> Allow 4K</label>
+    <label class="check"><input type="checkbox" id="s_autoNext"> Play the next episode automatically</label>
     <label>Check my streaming services first, and tell me instead of torrenting when the title is there</label>
     <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="netflix"> Netflix</label>
     <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="disneyplus"> Disney+</label>
@@ -126,6 +127,7 @@
       <button data-act="resume">▶ Resume</button>
       <button data-act="seek" data-val="30">30s ⟳</button>
       <button id="stopBtn">■ Stop</button>
+      <button id="nextBtn">⏭ Next episode</button>
       <label class="row small" style="margin:0;gap:6px">🔊 <input type="range" id="vol" min="0" max="100" value="50"></label>
     </div>
   </section>
@@ -240,7 +242,7 @@ async function showResults () {
 }
 
 // Now playing
-const STATE_TEXT = { streaming: 'On a streaming service', searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
+const STATE_TEXT = { buffering: 'Buffering…', streaming: 'On a streaming service', searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
 let pollTimer
 async function poll () {
   clearTimeout(pollTimer)
@@ -250,7 +252,8 @@ async function poll () {
     $('now').classList.toggle('hidden', !show)
     if (show) {
       $('nowTitle').textContent = s.title || ''
-      $('nowRelease').textContent = [s.release, s.tv && 'on ' + s.tv].filter(Boolean).join(' · ')
+      const ep = s.season && s.episode ? `S${s.season}E${s.episode}` : ''
+      $('nowRelease').textContent = [ep, s.release, s.tv && 'on ' + s.tv].filter(Boolean).join(' · ')
       const inApp = s.state === 'streaming'
       $('appRow').classList.toggle('hidden', !inApp)
       $('castRow').classList.toggle('hidden', inApp)
@@ -259,8 +262,14 @@ async function poll () {
       $('nowState').textContent = s.state === 'error' ? s.error : STATE_TEXT[s.state] || s.state
       $('nowState').className = 'state ' + s.state
       const t = s.torrent
-      $('nowBar').style.width = (t ? t.progress : 0) + '%'
-      $('nowStats').textContent = inApp ? (s.note || '') : t ? `${t.progress}% downloaded · ${t.downloadSpeedMBs} MB/s · ${t.peers} peers` : ''
+      // While playing, the bar shows how far into the video the TV is; before that, the download.
+      const p = s.progress
+      const watched = p && p.duration ? p.position / p.duration * 100 : null
+      $('nowBar').style.width = (s.state === 'buffering' ? s.buffered || 0 : watched ?? (t ? t.progress : 0)) + '%'
+      if (s.state === 'buffering') $('nowState').textContent = `Buffering… ${s.buffered || 0}%`
+      const time = p && p.duration ? `${clock(p.position)} / ${clock(p.duration)}` : ''
+      const dl = t ? `${t.progress}% downloaded · ${t.downloadSpeedMBs} MB/s · ${t.peers} peers` : ''
+      $('nowStats').textContent = inApp ? (s.note || '') : [time, dl].filter(Boolean).join(' · ')
     }
     pollTimer = setTimeout(poll, show ? 2000 : 10000)
   } catch { pollTimer = setTimeout(poll, 5000) }
@@ -274,11 +283,13 @@ $('vol').oninput = () => {
   clearTimeout(volTimer)
   volTimer = setTimeout(() => api('/control/volume', { method: 'POST', body: { value: $('vol').value / 100 } }).catch((e) => toast(e.message)), 200)
 }
+const clock = (sec) => { sec = Math.round(sec); const h = Math.floor(sec / 3600); const m = Math.floor(sec / 60) % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec % 60).padStart(2, '0') }
+$('nextBtn').onclick = async () => { const r = await api('/next', { method: 'POST' }).catch((e) => ({ speak: e.message })); toast(r.speak); poll() }
 $('stopBtn').onclick = async () => { await api('/stop', { method: 'POST' }).catch((e) => toast(e.message)); poll() }
 
 // Settings
 let settings = {}
-const FIELDS = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'maxSizeGb', 'minSeeders', 'avoidHevc', 'allow4k']
+const FIELDS = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'maxSizeGb', 'minSeeders', 'avoidHevc', 'allow4k', 'autoNext']
 function openSettings () { $('settings').classList.remove('hidden'); $('token').value = store.get('token') }
 $('settingsBtn').onclick = () => $('settings').classList.toggle('hidden') || openSettings()
 $('closeSettings').onclick = () => $('settings').classList.add('hidden')

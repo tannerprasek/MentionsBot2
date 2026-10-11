@@ -3,12 +3,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config, EDITABLE, saveSettings } from './config.js'
 import { parseRequest } from './query.js'
-import { search, resolveTorrent } from './search.js'
-import { startTorrent, stopTorrent, currentFile, stats, clearDownloads } from './torrent.js'
+import { search } from './search.js'
+import { currentFile, stats, clearDownloads } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
-import { listDevices, refreshTvs, pickDevice, onPlaybackFinished, playOn, stopPlayback, controlActive } from './tvs.js'
+import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
+import * as player from './player.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -18,27 +19,21 @@ app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '
 
 let status = { state: 'idle' }
 
-// Downloaded files are deleted once nobody is watching: when a Chromecast reports the video
-// finished, or when nothing has been streamed for IDLE_HOURS (Roku/LG don't report the end).
+// Downloaded files are deleted once nobody is watching: when the video ends (the player handles
+// that, moving on to the next episode if asked), or after IDLE_HOURS with nothing streamed.
 const IDLE_MS = Number(process.env.IDLE_HOURS || 2) * 3600_000
 let lastServed = Date.now()
 
-async function finishAndCleanUp (reason) {
-  if (!currentFile()) return
-  console.log(`[cleanup] ${reason}; deleting the download`)
-  await stopTorrent()
-  setStatus({ state: 'idle' })
-}
-
 clearDownloads()
-onPlaybackFinished(() => finishAndCleanUp('video finished'))
-setInterval(() => {
+setInterval(async () => {
   if (currentFile() && Date.now() - lastServed > IDLE_MS) {
-    stopPlayback().catch(() => {})
-    finishAndCleanUp('nothing streamed for a while')
+    console.log('[cleanup] nothing streamed for a while; deleting the download')
+    await player.stop()
+    setStatus({ state: 'idle' })
   }
 }, 60_000).unref()
 const setStatus = (s) => { status = { ...s, at: new Date().toISOString() }; console.log('[status]', status) }
+player.onStatus(setStatus)
 
 function auth (req, res, next) {
   if (!config.apiToken) return next()
@@ -80,21 +75,6 @@ app.get('/stream/:name', (req, res) => {
   res.on('close', () => stream.destroy())
   stream.pipe(res)
 })
-
-async function startPlayback (parsed, result, device) {
-  try {
-    setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.name })
-    const file = await startTorrent(await resolveTorrent(result.link), parsed)
-    lastServed = Date.now()
-    const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.ref ? '?cast=1' : ''}`
-
-    await playOn(device, url, parsed.title, file.name)
-    setStatus({ state: 'playing', title: parsed.title, release: result.title, file: file.name, tv: device.name })
-  } catch (err) {
-    console.error(err.stack)
-    setStatus({ state: 'error', title: parsed.title, error: err.message })
-  }
-}
 
 // If the title is on one of the user's services, say where instead of torrenting.
 // Returns true when it has sent the response.
@@ -145,30 +125,36 @@ app.post('/play', auth, async (req, res) => {
       if (handled) return
     }
 
+    // A bare show name continues where you left off; a known episode resumes mid-way.
+    const { parsed: planned, resume } = player.plan(parsed)
+
     let best
     if (req.body?.link) {
-      best = { title: req.body.release || parsed.title, link: req.body.link, seeders: req.body.seeders }
+      best = { title: req.body.release || planned.title, link: req.body.link, seeders: req.body.seeders }
     } else {
-      setStatus({ state: 'searching', title: parsed.title })
-      const results = await search(parsed)
+      setStatus({ state: 'searching', title: planned.title })
+      const results = await search(planned)
       if (!results.length) {
-        setStatus({ state: 'error', title: parsed.title, error: 'no results' })
-        return res.status(404).json({ error: 'no results', speak: `I couldn't find ${parsed.title}.` })
+        setStatus({ state: 'error', title: planned.title, error: 'no results' })
+        return res.status(404).json({ error: 'no results', speak: `I couldn't find ${planned.query}.` })
       }
       best = results[0]
     }
     const { device, exact } = await pickDevice(tvName, config.defaultTv)
     if (!device) {
-      setStatus({ state: 'error', title: parsed.title, error: 'No TVs found on the network' })
+      setStatus({ state: 'error', title: planned.title, error: 'No TVs found on the network' })
       return res.status(404).json({ error: 'no TVs found', speak: "I couldn't find any TVs on your network." })
     }
     const tv = device.name
-    const speak = !exact && tvName
-      ? `I couldn't find a TV called ${tvName}, so I'm playing ${parsed.title} on ${tv}.`
-      : `Starting ${parsed.title} on ${tv}.`
-    setStatus({ state: 'connecting', title: parsed.title, release: best.title, tv })
-    startPlayback(parsed, best, device)
-    res.json({ ok: true, query: parsed.query, release: best.title, seeders: best.seeders, tv, fallback: !exact, speak })
+    const ep = player.describeEpisode(planned)
+    const label = ep ? `${planned.title}, ${ep},` : planned.title
+    const resumeText = resume && await canResume(device) ? ` from ${player.minutesOf(resume.startAt)} minutes in` : ''
+    const speak = (!exact && tvName ? `I couldn't find a TV called ${tvName}. ` : '') +
+      `${planned.continued ? 'Continuing' : 'Starting'} ${label} on ${tv}${resumeText}.`
+    setStatus({ state: 'connecting', title: planned.title, release: best.title, tv })
+    lastServed = Date.now()
+    player.start({ parsed: planned, result: best, device, resume: resume || undefined })
+    res.json({ ok: true, query: planned.query, release: best.title, seeders: best.seeders, tv, fallback: !exact, speak })
   } catch (err) {
     setStatus({ state: 'error', title: parsed.title, error: err.message })
     res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}` })
@@ -176,16 +162,28 @@ app.post('/play', auth, async (req, res) => {
 })
 
 app.post('/stop', auth, async (_req, res) => {
-  await stopPlayback().catch(() => {})
-  await stopTorrent()
+  await player.stop()
   setStatus({ state: 'idle' })
   res.json({ ok: true, speak: 'Stopped.' })
 })
 
+// "Next episode": the episode after what's playing (or what played last), on the same TV.
+app.post('/next', auth, async (_req, res) => {
+  try {
+    lastServed = Date.now()
+    res.json(await player.playNext())
+  } catch (err) {
+    res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}` })
+  }
+})
+
+// "What's playing?" for Siri.
+app.get('/now', auth, (_req, res) => res.json({ ...status, progress: player.progress(), speak: player.describe(status) }))
+
 app.post('/control/:action', auth, async (req, res) => {
   try {
     await controlActive(req.params.action, req.body?.value ?? req.query.value)
-    res.json({ ok: true, speak: 'Done.' })
+    res.json({ ok: true, speak: { pause: 'Paused.', resume: 'Playing.' }[req.params.action] || 'Done.' })
   } catch (err) {
     res.status(400).json({ error: err.message, speak: err.message })
   }
@@ -200,7 +198,7 @@ app.get('/tvs', auth, async (_req, res) => {
   res.json(listDevices().map((d) => d.name))
 })
 app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind, ref }) => ({ name, kind, cast: Boolean(ref) }))))
-app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
+app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats(), progress: player.progress() }))
 
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`CastBot v${version} is running. Open http://localhost:${config.port} in Chrome`)

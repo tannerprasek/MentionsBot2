@@ -3,3 +3,4 @@ downloads/
 .env
 settings.json
 .needs-install
+history.json

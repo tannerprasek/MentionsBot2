@@ -16,3 +16,9 @@ test('SxxEyy', () => {
 test('season only', () => {
   assert.equal(parseRequest('Severance season 1').query, 'Severance S01')
 })
+test('from the start', () => {
+  const r = parseRequest('bluey season 2 episode 3 from the start')
+  assert.equal(r.query, 'bluey S02E03')
+  assert.equal(r.fromStart, true)
+  assert.equal(parseRequest('restart the great gatsby').title, 'the great gatsby')
+})

@@ -60,7 +60,15 @@ Then say: "Hey Siri, CastBot" → "Breaking Bad season 2 episode 3" → "Bedroom
 
 If you only have one TV, skip step 2 and set `DEFAULT_TV`.
 
-Add more shortcuts the same way for **CastBot Stop** (`POST /stop`), **CastBot Pause** (`POST /control/pause`), and **CastBot Resume** (`POST /control/resume`).
+Add more shortcuts the same way, each a **Get Contents of URL** followed by **Get Dictionary Value** `speak` and **Speak Text**:
+
+| Shortcut | URL | Method |
+|---|---|---|
+| CastBot Next | `/next` | POST |
+| What's Playing | `/now` | GET |
+| CastBot Pause | `/control/pause` | POST |
+| CastBot Resume | `/control/resume` | POST |
+| CastBot Stop | `/stop` | POST |
 
 **Away from home:** the phone has to reach the server. Install [Tailscale](https://tailscale.com) on the phone and the server, then use the server's Tailscale IP in the shortcut URL. The Chromecast still streams over your LAN.
 
@@ -93,6 +101,16 @@ A Roku or LG that also has Chromecast built in is listed once: torrents play ove
 Before searching torrents, CastBot checks JustWatch's catalog for whether the title is on Netflix, Disney+ or Apple TV+ (choose which in Settings). If it is, Siri and the page say which service has it and nothing is torrented.
 
 To torrent anyway, click **Play via torrent instead**, or start the request with "torrent", e.g. "torrent Stranger Things".
+
+## Watching shows
+
+- **Resume:** CastBot saves where you are every 10 seconds. Asking for the same movie or episode again picks up there (Chromecast and LG; Roku always starts from the beginning). Add "from the start" to skip that.
+- **Continue a show:** asking for just the show name ("Bluey") plays the episode you left unfinished, or the one after the last you finished.
+- **Next episode:** "CastBot Next" (or ⏭ on the page) plays the following episode on the same TV. With **Play the next episode automatically** on in Settings, it starts by itself when an episode ends.
+- **No waiting between episodes:** 10 minutes before an episode ends, the next one starts downloading in the background. If you're watching from a season pack, it's already there.
+- **No early stalls:** CastBot downloads the start (or the resume point) and the end of the file before it starts the TV.
+
+History is kept in `history.json` next to CastBot.
 
 ## Release selection
 

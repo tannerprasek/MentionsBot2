@@ -32,6 +32,8 @@ export const config = {
   // Services checked before torrenting; if the title is on one, CastBot says so instead of torrenting.
   streamingServices: (process.env.STREAMING_SERVICES ?? 'netflix,disneyplus,appletvplus').split(',').filter(Boolean),
   streamingCountry: process.env.STREAMING_COUNTRY || 'US',
+  // Start the next episode when one finishes.
+  autoNext: bool(process.env.AUTO_NEXT, true),
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
   samsungTokens: {},
   // Pairing keys LG TVs hand out after you accept the prompt, keyed by TV IP.
@@ -39,7 +41,7 @@ export const config = {
 }
 
 // Settings saved from the web page; these override .env.
-export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry']
+export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry', 'autoNext']
 const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
 
 try {

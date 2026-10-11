@@ -56,7 +56,7 @@ function closeSession () {
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, res) => (err ? reject(err) : resolve(res))))
 
-export async function play (device, url, title) {
+export async function play (device, url, title, startTime = 0) {
   closeSession()
   const host = await resolveHost(device.host)
   const client = new castv2.Client()
@@ -90,7 +90,8 @@ export async function play (device, url, title) {
       streamType: 'BUFFERED',
       metadata: { type: 0, metadataType: 0, title }
     }
-    await Promise.race([call((cb) => player.load(media, { autoplay: true }, cb)), failed, timeout(60_000, 'loading the video')])
+    const st = await Promise.race([call((cb) => player.load(media, { autoplay: true, currentTime: startTime }, cb)), failed, timeout(60_000, 'loading the video')])
+    if (session?.player === player) session.duration = st?.media?.duration
   } catch (err) {
     if (session?.client === client) session = null
     try { client.close() } catch {}
@@ -98,10 +99,21 @@ export async function play (device, url, title) {
   }
 }
 
+// { position, duration, state } of what's casting, in seconds; null when nothing is.
+export async function castProgress () {
+  if (!session) return null
+  const { player } = session
+  const st = await Promise.race([call((cb) => player.getStatus(cb)), new Promise((resolve) => setTimeout(() => resolve(undefined), 5000))])
+  if (st === undefined) return null
+  if (st?.media?.duration) session.duration = st.media.duration
+  return { position: st?.currentTime || 0, duration: session.duration || 0, state: (st?.playerState || 'IDLE').toLowerCase() }
+}
+
 export async function stopCast () {
   if (!session) return
   const { client, player } = session
-  await call((cb) => client.stop(player, cb)).catch(() => {})
+  // Don't hang if the TV never answers the stop request.
+  await Promise.race([call((cb) => client.stop(player, cb)), new Promise((resolve) => setTimeout(resolve, 5000))]).catch(() => {})
   closeSession()
 }
 

@@ -34,6 +34,15 @@ export function rokuPlay (ip, url, title, format) {
   return ecp(ip, `/input/15985?${q}`)
 }
 
+// { position, duration, state } from Roku's media player, in seconds.
+export async function rokuProgress (ip) {
+  const xml = await (await fetch(`http://${ip}:8060/query/media-player`, { signal: AbortSignal.timeout(4000) })).text()
+  const ms = (tag) => Number(xml.match(new RegExp(`<${tag}>(\\d+) ms</${tag}>`))?.[1] || 0) / 1000
+  const state = xml.match(/<player[^>]*state="([^"]+)"/)?.[1] || 'none'
+  const map = { play: 'playing', pause: 'paused', buffer: 'buffering', open: 'buffering', startup: 'buffering' }
+  return { position: ms('position'), duration: ms('duration'), state: map[state] || 'stopped' }
+}
+
 const KEYS = { pause: 'Play', resume: 'Play', stop: 'Home' }
 
 export async function rokuControl (ip, action, value) {

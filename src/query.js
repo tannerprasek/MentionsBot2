@@ -12,6 +12,9 @@ export function parseRequest (text) {
   // "torrent <title>" skips the streaming-service check.
   const force = /^torrent\s+/i.test(t)
   t = t.replace(/^torrent\s+/i, '')
+  // "... from the start" / "restart ..." skips resuming where you left off.
+  const fromStart = /\b(from the (start|beginning)|start over|restart)\b/i.test(t)
+  t = t.replace(/\b(from the (start|beginning)|start over)\b/gi, '').replace(/^restart\s+/i, '')
   let season, episode
 
   const sxe = t.match(/\bs(\d{1,2})\s*e(\d{1,3})\b/i)
@@ -29,5 +32,5 @@ export function parseRequest (text) {
   let query = title
   if (season && episode) query += ` S${pad(season)}E${pad(episode)}`
   else if (season) query += ` S${pad(season)}`
-  return { title, season, episode, query, isSeries: Boolean(season), force }
+  return { title, season, episode, query, isSeries: Boolean(season), force, fromStart }
 }

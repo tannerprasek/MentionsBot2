@@ -46,7 +46,7 @@ async function soap (svc, action, args) {
   return parser.parse(text)
 }
 
-export async function dlnaPlay (ip, url, title, mime) {
+export async function dlnaPlay (ip, url, title, mime, startAt = 0) {
   const r = renderers.get(ip)
   if (!r) throw new Error('This TV has no DLNA player')
   const didl = '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">' +
@@ -55,6 +55,26 @@ export async function dlnaPlay (ip, url, title, mime) {
   await soap(r.avt, 'Stop', { InstanceID: 0 }).catch(() => {})
   await soap(r.avt, 'SetAVTransportURI', { InstanceID: 0, CurrentURI: url, CurrentURIMetaData: didl })
   await soap(r.avt, 'Play', { InstanceID: 0, Speed: 1 })
+  if (startAt > 0) {
+    // Renderers only accept a seek once playback has started.
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const ok = await soap(r.avt, 'Seek', { InstanceID: 0, Unit: 'REL_TIME', Target: toTime(startAt) }).then(() => true, () => false)
+      if (ok) break
+    }
+  }
+}
+
+// { position, duration, state } from the renderer, in seconds.
+export async function dlnaProgress (ip) {
+  const r = renderers.get(ip)
+  if (!r) return null
+  const pos = JSON.stringify(await soap(r.avt, 'GetPositionInfo', { InstanceID: 0 }))
+  const tr = JSON.stringify(await soap(r.avt, 'GetTransportInfo', { InstanceID: 0 }))
+  const t = (k) => pos.match(new RegExp(`"${k}":"([\\d:.]+)"`))?.[1]
+  const st = tr.match(/"CurrentTransportState":"([A-Z_]+)"/)?.[1] || 'STOPPED'
+  const map = { PLAYING: 'playing', PAUSED_PLAYBACK: 'paused', TRANSITIONING: 'buffering' }
+  return { position: toSec(t('RelTime')), duration: toSec(t('TrackDuration')), state: map[st] || 'stopped' }
 }
 
 const toSec = (t) => String(t || '0:0:0').split(':').reduce((a, b) => a * 60 + Number(b || 0), 0)
