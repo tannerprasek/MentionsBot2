@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CastBot</title>
+<style>
+  :root {
+    --bg: #f5f5f7; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #e2e2e7;
+    --accent: #0a66ff; --accent-text: #ffffff; --ok: #1a7f37; --err: #c62828; --chip: #eef2ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #181b21; --text: #ececf1; --muted: #9a9aa6; --line: #2a2e37;
+      --accent: #4c8dff; --accent-text: #0b0d12; --ok: #4ac26b; --err: #ff6b6b; --chip: #1f2633;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, select, button { font: inherit; color: inherit; }
+  input[type=text], input[type=password], input[type=number], select {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0;
+  }
+  #q { flex: 1 1 260px; font-size: 17px; }
+  #tv { flex: 0 1 200px; }
+  button { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .icon { background: none; border: none; color: var(--muted); padding: 6px 8px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .results { list-style: none; margin: 0; padding: 0; }
+  .results li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .results li:first-child { border-top: none; }
+  .rname { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 6px; padding: 1px 6px; margin-right: 6px; font-size: 12px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 10px 0; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .5s; }
+  .state { font-weight: 600; }
+  .state.error { color: var(--err); }
+  .state.playing { color: var(--ok); }
+  #now h2 { margin: 0 0 4px; font-size: 18px; }
+  label { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .grid input, .grid select, .full input { width: 100%; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); font-size: 14px; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); }
+  #toast.show { opacity: 1; }
+  .hidden { display: none; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } #tv { flex: 1 1 100%; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>CastBot</h1>
+    <button class="icon" id="settingsBtn" title="Settings">⚙ Settings</button>
+  </header>
+
+  <section class="panel hidden" id="settings">
+    <strong>Settings</strong>
+    <div class="full">
+      <label for="s_torznabUrl">Prowlarr / Jackett Torznab URL</label>
+      <input type="text" id="s_torznabUrl" placeholder="http://localhost:9696/1/api">
+      <label for="s_torznabApiKey">Indexer API key</label>
+      <input type="password" id="s_torznabApiKey">
+    </div>
+    <div class="grid">
+      <div><label for="s_defaultTv">Default TV</label><select id="s_defaultTv"></select></div>
+      <div><label for="s_preferredQuality">Preferred quality</label>
+        <select id="s_preferredQuality"><option>1080p</option><option>720p</option><option>2160p</option></select></div>
+      <div><label for="s_maxSizeGb">Max size (GB)</label><input type="number" id="s_maxSizeGb" min="1"></div>
+      <div><label for="s_minSeeders">Min seeders</label><input type="number" id="s_minSeeders" min="0"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="s_avoidHevc"> Skip HEVC / x265 (most Chromecasts can't play it)</label>
+    <label class="check"><input type="checkbox" id="s_allow4k"> Allow 4K</label>
+    <div class="full">
+      <label for="token">Access token (only if API_TOKEN is set on the server)</label>
+      <input type="password" id="token">
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="saveSettings">Save</button>
+      <button id="closeSettings">Close</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <form class="row" id="searchForm">
+      <input type="text" id="q" placeholder="Movie or show, e.g. The Bear season 2 episode 4" autocomplete="off" autofocus>
+      <select id="tv" title="TV"></select>
+      <button type="button" class="icon" id="refreshTv" title="Look for TVs again">↻</button>
+    </form>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="playBest">▶ Play best match</button>
+      <button id="searchBtn">Show all results</button>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="now">
+    <div class="row" style="justify-content:space-between">
+      <div style="min-width:0">
+        <h2 id="nowTitle"></h2>
+        <div class="small muted" id="nowRelease"></div>
+      </div>
+      <span class="state" id="nowState"></span>
+    </div>
+    <div class="bar"><div id="nowBar"></div></div>
+    <div class="small muted" id="nowStats"></div>
+    <div class="row" style="margin-top:12px">
+      <button data-act="seek" data-val="-30">⟲ 30s</button>
+      <button data-act="pause">❚❚ Pause</button>
+      <button data-act="resume">▶ Resume</button>
+      <button data-act="seek" data-val="30">30s ⟳</button>
+      <button id="stopBtn">■ Stop</button>
+      <label class="row small" style="margin:0;gap:6px">🔊 <input type="range" id="vol" min="0" max="100" value="50"></label>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="resultsPanel">
+    <div class="small muted" id="resultsInfo"></div>
+    <ul class="results" id="results"></ul>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const store = {
+  get (k) { try { return localStorage.getItem(k) || '' } catch { return '' } },
+  set (k, v) { try { localStorage.setItem(k, v) } catch {} }
+}
+
+let toastTimer
+function toast (msg) {
+  $('toast').textContent = msg
+  $('toast').classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3500)
+}
+
+async function api (path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = store.get('token')
+  if (token) headers.Authorization = 'Bearer ' + token
+  const res = await fetch(path, { ...opts, headers, body: opts.body && JSON.stringify(opts.body) })
+  const data = await res.json().catch(() => ({}))
+  if (res.status === 401) { openSettings(); throw new Error('Enter your access token in Settings') }
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status)
+  return data
+}
+
+const fmtSize = (b) => b ? (b / 1024 ** 3).toFixed(b > 1024 ** 3 * 10 ? 0 : 1) + ' GB' : ''
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+// TVs
+async function loadTvs () {
+  try {
+    const devices = await api('/devices')
+    const saved = store.get('tv')
+    const opts = devices.length
+      ? devices.map((d) => `<option ${d.name === saved ? 'selected' : ''}>${esc(d.name)}</option>`).join('')
+      : '<option value="">No TVs found yet</option>'
+    $('tv').innerHTML = opts
+    $('s_defaultTv').innerHTML = '<option value="">(first TV found)</option>' + devices.map((d) => `<option>${esc(d.name)}</option>`).join('')
+    if (settings.defaultTv) $('s_defaultTv').value = settings.defaultTv
+    if (!saved && settings.defaultTv) $('tv').value = settings.defaultTv
+    return devices
+  } catch (err) { toast(err.message); return [] }
+}
+$('tv').onchange = () => store.set('tv', $('tv').value)
+$('refreshTv').onclick = async () => {
+  toast('Looking for TVs…')
+  await new Promise((r) => setTimeout(r, 3000))
+  const d = await loadTvs()
+  toast(d.length ? `Found ${d.length} TV${d.length > 1 ? 's' : ''}` : 'No TVs found. Same Wi-Fi?')
+}
+
+// Search and play
+const query = () => $('q').value.trim()
+$('searchForm').onsubmit = (e) => { e.preventDefault(); playBest() }
+$('playBest').onclick = playBest
+$('searchBtn').onclick = showResults
+
+async function playBest () {
+  if (!query()) return $('q').focus()
+  $('playBest').disabled = true
+  try {
+    const r = await api('/play', { method: 'POST', body: { title: query(), tv: $('tv').value } })
+    toast(r.speak)
+    poll()
+  } catch (err) { toast(err.message) } finally { $('playBest').disabled = false }
+}
+
+async function showResults () {
+  if (!query()) return $('q').focus()
+  $('resultsPanel').classList.remove('hidden')
+  $('resultsInfo').textContent = 'Searching…'
+  $('results').innerHTML = ''
+  try {
+    const { query: q, results } = await api('/api/search?q=' + encodeURIComponent(query()))
+    $('resultsInfo').textContent = results.length ? `${results.length} result${results.length === 1 ? "" : "s"} for “${q}”` : `Nothing found for “${q}”`
+    $('results').innerHTML = results.map((r, i) => `
+      <li>
+        <div class="rname">${esc(r.title)}<br>
+          <span class="chip">${r.seeders} seeders</span><span class="chip">${fmtSize(r.size)}</span></div>
+        <button data-i="${i}">▶ Play</button>
+      </li>`).join('')
+    $('results').querySelectorAll('button').forEach((b) => {
+      b.onclick = async () => {
+        const r = results[b.dataset.i]
+        try {
+          const res = await api('/play', { method: 'POST', body: { title: query(), tv: $('tv').value, link: r.link, release: r.title, seeders: r.seeders } })
+          toast(res.speak); poll()
+        } catch (err) { toast(err.message) }
+      }
+    })
+  } catch (err) { $('resultsInfo').textContent = err.message }
+}
+
+// Now playing
+const STATE_TEXT = { searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
+let pollTimer
+async function poll () {
+  clearTimeout(pollTimer)
+  try {
+    const s = await api('/status')
+    const show = s.state && s.state !== 'idle'
+    $('now').classList.toggle('hidden', !show)
+    if (show) {
+      $('nowTitle').textContent = s.title || ''
+      $('nowRelease').textContent = [s.release, s.tv && 'on ' + s.tv].filter(Boolean).join(' · ')
+      $('nowState').textContent = s.state === 'error' ? s.error : STATE_TEXT[s.state] || s.state
+      $('nowState').className = 'state ' + s.state
+      const t = s.torrent
+      $('nowBar').style.width = (t ? t.progress : 0) + '%'
+      $('nowStats').textContent = t ? `${t.progress}% downloaded · ${t.downloadSpeedMBs} MB/s · ${t.peers} peers` : ''
+    }
+    pollTimer = setTimeout(poll, show ? 2000 : 10000)
+  } catch { pollTimer = setTimeout(poll, 5000) }
+}
+
+document.querySelectorAll('[data-act]').forEach((b) => {
+  b.onclick = () => api('/control/' + b.dataset.act, { method: 'POST', body: b.dataset.val ? { value: Number(b.dataset.val) } : {} }).catch((e) => toast(e.message))
+})
+let volTimer
+$('vol').oninput = () => {
+  clearTimeout(volTimer)
+  volTimer = setTimeout(() => api('/control/volume', { method: 'POST', body: { value: $('vol').value / 100 } }).catch((e) => toast(e.message)), 200)
+}
+$('stopBtn').onclick = async () => { await api('/stop', { method: 'POST' }).catch((e) => toast(e.message)); poll() }
+
+// Settings
+let settings = {}
+const FIELDS = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'maxSizeGb', 'minSeeders', 'avoidHevc', 'allow4k']
+function openSettings () { $('settings').classList.remove('hidden'); $('token').value = store.get('token') }
+$('settingsBtn').onclick = () => $('settings').classList.toggle('hidden') || openSettings()
+$('closeSettings').onclick = () => $('settings').classList.add('hidden')
+
+async function loadSettings () {
+  try {
+    settings = await api('/api/settings')
+    for (const k of FIELDS) {
+      const el = $('s_' + k)
+      if (el.type === 'checkbox') el.checked = settings[k]
+      else el.value = settings[k] ?? ''
+    }
+    if (!settings.torznabUrl) { openSettings(); toast('Add your Prowlarr or Jackett details to get started') }
+  } catch {}
+}
+
+$('saveSettings').onclick = async () => {
+  store.set('token', $('token').value.trim())
+  const body = {}
+  for (const k of FIELDS) {
+    const el = $('s_' + k)
+    body[k] = el.type === 'checkbox' ? el.checked : el.value
+  }
+  try {
+    await api('/api/settings', { method: 'POST', body })
+    toast('Saved')
+    $('settings').classList.add('hidden')
+    await loadSettings(); loadTvs()
+  } catch (err) { toast(err.message) }
+}
+
+loadSettings().then(loadTvs)
+poll()
+</script>
+</body>
+</html>

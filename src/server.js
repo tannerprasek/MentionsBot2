@@ -1,5 +1,7 @@
 import express from 'express'
-import { config } from './config.js'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { config, EDITABLE, saveSettings } from './config.js'
 import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
@@ -8,6 +10,7 @@ import { listDevices, waitForDevice, play, stopCast, control } from './cast.js'
 const app = express()
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
+app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')))
 
 let status = { state: 'idle' }
 const setStatus = (s) => { status = { ...s, at: new Date().toISOString() }; console.log('[status]', status) }
@@ -60,6 +63,27 @@ async function startPlayback (parsed, result, tvName) {
   }
 }
 
+app.get('/api/search', auth, async (req, res) => {
+  if (!req.query.q) return res.status(400).json({ error: 'q is required' })
+  const parsed = parseRequest(String(req.query.q))
+  try {
+    const results = await search(parsed)
+    res.json({ query: parsed.query, results: results.slice(0, 25) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/settings', auth, (_req, res) => {
+  res.json(Object.fromEntries(EDITABLE.map((k) => [k, config[k]])))
+})
+
+app.post('/api/settings', auth, (req, res) => {
+  saveSettings(req.body || {})
+  res.json({ ok: true })
+})
+
+// Body: { title, tv } plays the best match. Add { link, release } to play a specific search result.
 app.post('/play', auth, async (req, res) => {
   const text = req.body?.title || req.body?.text || req.query.title
   const tvName = req.body?.tv || req.query.tv || config.defaultTv
@@ -67,13 +91,18 @@ app.post('/play', auth, async (req, res) => {
 
   const parsed = parseRequest(text)
   try {
-    setStatus({ state: 'searching', title: parsed.title })
-    const results = await search(parsed)
-    if (!results.length) {
-      setStatus({ state: 'error', title: parsed.title, error: 'no results' })
-      return res.status(404).json({ error: 'no results', speak: `I couldn't find ${parsed.title}.` })
+    let best
+    if (req.body?.link) {
+      best = { title: req.body.release || parsed.title, link: req.body.link, seeders: req.body.seeders }
+    } else {
+      setStatus({ state: 'searching', title: parsed.title })
+      const results = await search(parsed)
+      if (!results.length) {
+        setStatus({ state: 'error', title: parsed.title, error: 'no results' })
+        return res.status(404).json({ error: 'no results', speak: `I couldn't find ${parsed.title}.` })
+      }
+      best = results[0]
     }
-    const best = results[0]
     startPlayback(parsed, best, tvName)
     res.json({
       ok: true,
@@ -109,5 +138,6 @@ app.get('/devices', auth, (_req, res) => res.json(listDevices()))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`Listening on http://${config.publicHost}:${config.port}`)
+  console.log(`CastBot is running. Open http://localhost:${config.port} in Chrome`)
+  console.log(`(from your phone: http://${config.publicHost}:${config.port})`)
 })

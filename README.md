@@ -9,6 +9,18 @@ Siri Shortcut ──POST /play──▶ CastBot server ──Torznab──▶ Pr
                                    └─ Chromecast (mDNS discovery, Default Media Receiver)
 ```
 
+## Quick start (no Terminal)
+
+1. Install [Node.js](https://nodejs.org/en/download) and [Prowlarr](https://prowlarr.com) on a computer that's on the same Wi-Fi as your TVs. In Prowlarr, add your indexers.
+2. Download this repo (green **Code** button → **Download ZIP**) and unzip it.
+3. Double-click **Start CastBot.command** (Mac) or **Start CastBot.bat** (Windows). Chrome opens the CastBot page.
+4. In **⚙ Settings**, paste the Prowlarr Torznab URL and API key, then click Save.
+5. Type a movie or show, pick a TV, and click **▶ Play best match**.
+
+On a Mac, the first time, right-click **Start CastBot.command** → **Open** if macOS blocks it.
+
+From your phone, open the second address the launcher window prints (`http://192.168.x.x:8787`).
+
 ## Requirements
 
 - An always-on machine on the same LAN as the TVs (Mac mini, Raspberry Pi 4/5, NAS, old laptop), with Node 20 or newer
