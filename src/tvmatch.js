@@ -1,7 +1,9 @@
 // Fuzzy TV-name matching, so "the frame", "frame tv" or "living rom" still find the right device.
 const STOP = new Set(['tv', 'the', 'my', 'on', 'in', 'a'])
-const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-const tokens = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !STOP.has(t))
+// Siri writes brand initials as "L.G." or "L G"; join them back into "lg".
+const joinInitials = (s) => s.replace(/\b([a-z])\.(?=\s*[a-z]\b)/gi, '$1').replace(/\b([a-z])\s+(?=[a-z]\b)/gi, '$1').replace(/\b([a-z]{2,4})\.(?=\s|$)/gi, '$1')
+const norm = (s) => joinInitials(s).toLowerCase().replace(/[^a-z0-9]/g, '')
+const tokens = (s) => joinInitials(s).toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !STOP.has(t))
 
 function lev (a, b) {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i)

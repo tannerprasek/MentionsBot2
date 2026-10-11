@@ -24,3 +24,10 @@ test('unrelated names do not match', () => {
   assert.equal(bestTv('garage', tvs), -1)
   assert.equal(bestTv('office', tvs), -1)
 })
+
+test('real TV names: LG vs the Frame', () => {
+  const real = ['43" The Frame', '[LG] webOS TV OLED77', 'TCL Roku TV']
+  for (const q of ['LG', 'lg tv', 'the LG', 'L.G.', 'L G', 'LG OLED', 'oled', 'webos']) assert.equal(bestTv(q, real), 1, q)
+  for (const q of ['frame', 'the frame', '43 frame']) assert.equal(bestTv(q, real), 0, q)
+  for (const q of ['TCL', 'roku', 'T.C.L.']) assert.equal(bestTv(q, real), 2, q)
+})
