@@ -147,6 +147,7 @@ app.post('/play', auth, async (req, res) => {
       return res.status(404).json({ error: 'no TVs found', speak: "I couldn't find any TVs on your network." })
     }
     const tv = device.name
+    console.log(`[tv] asked for "${tvName || '(none)'}" → "${tv}" (${device.kind})${exact ? '' : ' [fallback]'}`)
     const ep = player.describeEpisode(planned)
     const label = ep ? `${planned.title}, ${ep},` : planned.title
     const resumeText = resume && await canResume(device) ? ` from ${player.minutesOf(resume.startAt)} minutes in` : ''

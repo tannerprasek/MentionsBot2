@@ -2,7 +2,7 @@
 // with name matching, playback and remote control routed to the right protocol.
 import path from 'node:path'
 import { config, saveDeviceKey } from './config.js'
-import { bestTv } from './tvmatch.js'
+import { bestTv, tvScore } from './tvmatch.js'
 import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, castProgress, stopCast, control as castControl } from './cast.js'
 import { rokuDevices, rokuPlay, rokuProgress, rokuControl } from './roku.js'
 import { lgDevices, lgPlay, lgControl } from './lg.js'
@@ -32,14 +32,22 @@ export function listDevices () {
     ...rokuDevices().map((d) => ({ ...d, kind: 'roku' }))
   ]
   const casts = castDevices()
+  // Same IP alone isn't enough (a wrong address lookup would merge two different TVs);
+  // the names must look alike too, e.g. "[LG] webOS TV OLED77" and "LG OLED77".
   const out = natives.map((n) => {
-    const c = casts.find((x) => x.ip && x.ip === n.ip)
+    const c = casts.find((x) => x.ip && x.ip === n.ip && sameTv(x.friendlyName, n.name, n.kind))
     return { name: c ? c.friendlyName : n.name, names: c ? [c.friendlyName, n.name] : [n.name], kind: n.kind, ip: n.ip, ref: c }
   })
   for (const c of casts) {
     if (!out.some((d) => d.ref === c)) out.push({ name: c.friendlyName, names: [c.friendlyName], kind: 'cast', host: c.host, ip: c.ip, ref: c })
   }
   return out
+}
+
+function sameTv (castName, nativeName, kind) {
+  if (tvScore(castName, nativeName) >= 0.6 || tvScore(nativeName, castName) >= 0.6) return true
+  const brand = kind === 'lg' ? /\blg\b|webos/i : /roku|tcl|hisense/i
+  return brand.test(castName)
 }
 
 export function findDevice (name) {
@@ -89,6 +97,7 @@ export async function canResume (device) {
 export async function playOn (device, url, title, fileName, startAt = 0) {
   await stopPlayback()
   const ip = await deviceIp(device)
+  console.log(`[tv] playing on "${device.name}" (${device.kind}${device.ref ? ' + cast' : ''}, ${ip})`)
   if (device.ref) {
     if (device.kind === 'cast' && await isSamsung(ip)) {
       await exitArtMode(ip, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) }).catch(() => {})
