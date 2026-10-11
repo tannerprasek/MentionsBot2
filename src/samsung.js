@@ -2,6 +2,7 @@
 // Launching is tried several ways and checked, because Samsung models differ in what they accept.
 import WebSocket from 'ws'
 import net from 'node:net'
+import { dialNetflix } from './dial.js'
 
 // Names used to find the app in the TV's installed-app list.
 const APP_NAMES = { netflix: /netflix/i, disneyplus: /disney/i, appletvplus: /apple ?tv/i }
@@ -233,8 +234,18 @@ async function pickProfile (ws, profile) {
   await sleep(500)
 }
 
+// Resolves { deep: true } when the app opened straight to the title, { deep: false } when only the app opened.
 async function openAppNow (ip, service, url, { token, onToken, profile } = {}) {
   await describeTv(ip)
+  if (service === 'netflix') {
+    await exitArtMode(ip, { token, onToken }).catch(() => {})
+    if (await dialNetflix(ip, url)) {
+      log('Netflix opened to the title over DIAL')
+      const ws = await connect(ip, token, onToken).catch(() => null)
+      if (ws) { await pickProfile(ws, profile); ws.close() }
+      return { deep: true }
+    }
+  }
   if (!APPS[service]) throw new Error(`No TV app known for ${service}`)
   log(`opening ${service} on ${ip}${token ? '' : ' (first time: accept the Allow prompt on the TV)'}`)
   const ws = await connect(ip, token, onToken)
@@ -273,17 +284,17 @@ async function openAppNow (ip, service, url, { token, onToken, profile } = {}) {
         continue
       }
       const ok = await waitRunning(ip, id)
-      if (ok) { log(`${label}: app is running`); await pickProfile(ws, profile); return }
+      if (ok) { log(`${label}: app is running`); await pickProfile(ws, profile); return { deep: false } }
       if (ok === null) {
         // This TV won't say whether the app opened; send a few variants, then stop.
         log(`${label}: sent (TV doesn't report running apps)`)
         await sleep(1500)
-        if (++unverified >= 3) { await pickProfile(ws, profile); return }
+        if (++unverified >= 3) { await pickProfile(ws, profile); return { deep: false } }
         continue
       }
       log(`${label}: app didn't open`)
     }
-    if (unverified) { await pickProfile(ws, profile); return }
+    if (unverified) { await pickProfile(ws, profile); return { deep: false } }
     throw new Error(`The TV didn't open ${service}`)
   } finally {
     await sleep(500)

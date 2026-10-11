@@ -118,11 +118,28 @@ async function tryStreaming (parsed, tvName, res) {
   const tv = device.name
   await stopPlayback().catch(() => {})
   await stopTorrent()
+  // Only Netflix accepts "open this title" from outside; for the rest CastBot opens the app.
+  const deepLinkable = hit.service === 'netflix'
+  const yourself = `Search for ${hit.title} yourself.`
   setStatus({ state: 'opening-app', title: hit.title, service: hit.serviceName, tv, url: hit.url })
-  res.json({ ok: true, streaming: hit, tv, speak: `${hit.title} is on ${hit.serviceName}. Opening it on ${tv}.` })
+  res.json({
+    ok: true,
+    streaming: hit,
+    tv,
+    speak: deepLinkable
+      ? `${hit.title} is on Netflix. Opening it on ${tv}.`
+      : `${hit.title} is on ${hit.serviceName}. Opening ${hit.serviceName} on ${tv}. ${yourself}`
+  })
 
   openAppOn(device, hit.service, hit.url, hit.isSeries)
-    .then(() => setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, tv, url: hit.url }))
+    .then((r) => setStatus({
+      state: 'streaming',
+      title: hit.title,
+      service: hit.serviceName,
+      tv,
+      url: hit.url,
+      note: r?.deep ? `Opened ${hit.title} in ${hit.serviceName}.` : `${hit.serviceName} is open. ${yourself}`
+    }))
     .catch((err) => setStatus({ state: 'error', title: hit.title, error: `Couldn't open ${hit.serviceName}: ${err.message}` }))
   return true
 }

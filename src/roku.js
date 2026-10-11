@@ -57,12 +57,15 @@ export async function rokuOpenApp (ip, service, url, isSeries, profile) {
   const app = APPS[service]
   if (!app) throw new Error(`No Roku app known for ${service}`)
   await ecp(ip, `/launch/${app}?${new URLSearchParams(deepLink(service, url, isSeries))}`)
-  if (!profile) return
+  // Netflix documents Roku content IDs; the others only open the app.
+  const result = { deep: service === 'netflix' }
+  if (!profile) return result
   // Same profile-screen navigation as on Samsung: first profile, then right, then OK.
   await new Promise((r) => setTimeout(r, 8000))
   for (let i = 0; i < 6; i++) await ecp(ip, '/keypress/Left')
   for (let i = 1; i < profile; i++) await ecp(ip, '/keypress/Right')
   await ecp(ip, '/keypress/Select')
+  return result
 }
 
 const KEYS = { pause: 'Play', resume: 'Play', stop: 'Home' }

@@ -4,7 +4,8 @@ import ssdp from 'node-ssdp'
 const TARGETS = [
   'roku:ecp',
   'urn:lge-com:service:webos-second-screen:1',
-  'urn:schemas-upnp-org:device:MediaRenderer:1'
+  'urn:schemas-upnp-org:device:MediaRenderer:1',
+  'urn:dial-multiscreen-org:service:dial:1'
 ]
 
 const client = new ssdp.Client()

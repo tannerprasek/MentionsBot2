@@ -92,7 +92,7 @@ A Roku or LG that also has Chromecast built in is listed once: torrents play ove
 
 Before searching torrents, CastBot checks JustWatch's catalog for whether the title is on Netflix, Disney+ or Apple TV+ (choose which in Settings). If it is:
 
-- **Samsung, LG and Roku TVs:** CastBot opens that service's app on the TV. The first time, Samsung and LG TVs show an **Allow** prompt for CastBot; accept it once. CastBot asks the app to go straight to the title, but some apps only open their home screen.
+- **Samsung, LG and Roku TVs:** CastBot opens that service's app on the TV. The first time, Samsung and LG TVs show an **Allow** prompt for CastBot; accept it once. Netflix opens straight to the title (over DIAL on Samsung, content IDs on Roku/LG). Disney+ and Apple TV only open the app; Siri and the page tell you to pick the title yourself.
 - **Other TVs:** Siri and the page tell you which service has it.
 
 A Samsung Frame in Art Mode is switched to TV mode first (over its Art Mode API, or a Power press if the TV ignores that), both before opening an app and before casting.

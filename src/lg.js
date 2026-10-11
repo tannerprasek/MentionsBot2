@@ -52,6 +52,7 @@ function contentId (service, url) {
 export async function lgOpenApp (ip, service, url, keys) {
   const tv = await connect(ip, keys.get(ip), (k) => keys.set(ip, k))
   await request(tv, 'ssap://system.launcher/launch', { id: APPS[service], contentId: contentId(service, url) })
+  return { deep: service === 'netflix' }
 }
 
 // Fallback player when the TV has no DLNA renderer.

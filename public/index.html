@@ -264,7 +264,7 @@ async function poll () {
       $('nowState').className = 'state ' + s.state
       const t = s.torrent
       $('nowBar').style.width = (t ? t.progress : 0) + '%'
-      $('nowStats').textContent = !inApp && t ? `${t.progress}% downloaded · ${t.downloadSpeedMBs} MB/s · ${t.peers} peers` : ''
+      $('nowStats').textContent = inApp ? (s.note || '') : t ? `${t.progress}% downloaded · ${t.downloadSpeedMBs} MB/s · ${t.peers} peers` : ''
     }
     pollTimer = setTimeout(poll, show ? 2000 : 10000)
   } catch { pollTimer = setTimeout(poll, 5000) }
