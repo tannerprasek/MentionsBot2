@@ -44,6 +44,8 @@ export const refreshCast = () => client.update()
 // chromecast-api is only used for discovery. Its connect/close path crashes on a failed
 // connection and hides the real error, so the cast session is driven with castv2-client here.
 let session = null // { client, player }
+const finishedHandlers = []
+export const onCastFinished = (fn) => finishedHandlers.push(fn)
 
 function closeSession () {
   const s = session
@@ -76,6 +78,11 @@ export async function play (device, url, title) {
     ])
     const player = await Promise.race([call((cb) => client.launch(castv2.DefaultMediaReceiver, cb)), failed, timeout(20_000, 'opening the player')])
     session = { client, player, device }
+    player.on('status', (st) => {
+      if (st?.playerState === 'IDLE' && st.idleReason === 'FINISHED' && session?.player === player) {
+        for (const fn of finishedHandlers) fn()
+      }
+    })
     // Default Media Receiver plays H.264 MKVs when told they are video/mp4.
     const media = {
       contentId: url,

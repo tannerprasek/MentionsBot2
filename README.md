@@ -105,5 +105,5 @@ Results with fewer than `MIN_SEEDERS` seeders, larger than `MAX_SIZE_GB`, CAM/TS
 
 - The Default Media Receiver plays H.264 video in MP4 or MKV. HEVC and some audio codecs (DTS, TrueHD) won't play, which is why HEVC is filtered out. A Chromecast with Google TV handles more formats.
 - Playback starts once enough of the file has downloaded. Seeking ahead makes WebTorrent fetch that part first.
-- Files are kept in `DOWNLOAD_DIR`. Clear it out yourself when it fills up.
+- Downloads are temporary. They're deleted when you press Stop or play something else, when a Chromecast reports the video finished, after `IDLE_HOURS` (default 2) with nothing streamed, and on every start.
 - `npm test` runs the query-parser tests.

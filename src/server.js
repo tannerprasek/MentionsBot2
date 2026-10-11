@@ -4,11 +4,11 @@ import { fileURLToPath } from 'node:url'
 import { config, EDITABLE, saveSettings } from './config.js'
 import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
-import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
+import { startTorrent, stopTorrent, currentFile, stats, clearDownloads } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
-import { listDevices, pickDevice, playOn, openAppOn, canOpenApps, stopPlayback, controlActive } from './tvs.js'
+import { listDevices, pickDevice, onPlaybackFinished, playOn, openAppOn, canOpenApps, stopPlayback, controlActive } from './tvs.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -17,6 +17,27 @@ app.use(express.urlencoded({ extended: false }))
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')))
 
 let status = { state: 'idle' }
+
+// Downloaded files are deleted once nobody is watching: when a Chromecast reports the video
+// finished, or when nothing has been streamed for IDLE_HOURS (Roku/LG don't report the end).
+const IDLE_MS = Number(process.env.IDLE_HOURS || 2) * 3600_000
+let lastServed = Date.now()
+
+async function finishAndCleanUp (reason) {
+  if (!currentFile()) return
+  console.log(`[cleanup] ${reason}; deleting the download`)
+  await stopTorrent()
+  setStatus({ state: 'idle' })
+}
+
+clearDownloads()
+onPlaybackFinished(() => finishAndCleanUp('video finished'))
+setInterval(() => {
+  if (currentFile() && Date.now() - lastServed > IDLE_MS) {
+    stopPlayback().catch(() => {})
+    finishAndCleanUp('nothing streamed for a while')
+  }
+}, 60_000).unref()
 const setStatus = (s) => { status = { ...s, at: new Date().toISOString() }; console.log('[status]', status) }
 
 function auth (req, res, next) {
@@ -52,7 +73,9 @@ app.get('/stream/:name', (req, res) => {
     res.status(206).set('Content-Range', `bytes ${start}-${end}/${size}`)
   }
   res.set('Content-Length', end - start + 1)
+  lastServed = Date.now()
   const stream = file.createReadStream({ start, end })
+  stream.on('data', () => { lastServed = Date.now() })
   stream.on('error', () => res.destroy())
   res.on('close', () => stream.destroy())
   stream.pipe(res)
@@ -62,6 +85,7 @@ async function startPlayback (parsed, result, device) {
   try {
     setStatus({ state: 'connecting', title: parsed.title, release: result.title, tv: device.name })
     const file = await startTorrent(await resolveTorrent(result.link), parsed)
+    lastServed = Date.now()
     const url = `http://${config.publicHost}:${config.port}/stream/${encodeURIComponent(file.name)}${device.ref ? '?cast=1' : ''}`
 
     await playOn(device, url, parsed.title, file.name)

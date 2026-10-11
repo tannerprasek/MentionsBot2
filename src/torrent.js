@@ -1,6 +1,29 @@
 import WebTorrent from 'webtorrent'
+import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
+
+// Downloads are temporary: they're deleted when playback stops, and leftovers are cleared on start.
+// Only CastBot's own folder is ever emptied: the default ./downloads, or a custom DOWNLOAD_DIR
+// that carries the marker file (so pointing it at an existing folder never wipes that folder).
+const MARKER = '.castbot-temp'
+const dir = () => path.resolve(config.downloadDir)
+
+export function clearDownloads () {
+  const d = dir()
+  if (!fs.existsSync(d)) {
+    fs.mkdirSync(d, { recursive: true })
+    fs.writeFileSync(path.join(d, MARKER), 'Temporary CastBot downloads. Emptied automatically.\n')
+    return
+  }
+  if (!fs.existsSync(path.join(d, MARKER))) {
+    if (process.env.DOWNLOAD_DIR && fs.readdirSync(d).length) return console.warn(`[torrent] ${d} wasn't created by CastBot; not emptying it`)
+    fs.writeFileSync(path.join(d, MARKER), 'Temporary CastBot downloads. Emptied automatically.\n')
+  }
+  for (const name of fs.readdirSync(d)) {
+    if (name !== MARKER) fs.rmSync(path.join(d, name), { recursive: true, force: true })
+  }
+}
 
 const VIDEO = /\.(mp4|mkv|m4v|webm|avi|mov)$/i
 const client = new WebTorrent()
@@ -23,11 +46,18 @@ export function stats () {
   }
 }
 
+function removeAndDelete (t) {
+  return new Promise((resolve) => client.remove(t, { destroyStore: true }, () => {
+    if (t.name) fs.rmSync(path.join(dir(), t.name), { recursive: true, force: true })
+    resolve()
+  }))
+}
+
 export async function stopTorrent () {
   if (!current) return
   const t = current.torrent
   current = null
-  await new Promise((resolve) => client.remove(t, { destroyStore: false }, () => resolve()))
+  await removeAndDelete(t).catch((err) => console.error('[torrent] cleanup', err.message))
 }
 
 function pickFile (files, req) {
@@ -44,15 +74,15 @@ export async function startTorrent (torrentId, req, timeoutMs = 90_000) {
   await stopTorrent()
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      client.remove(torrent, () => {})
+      removeAndDelete(torrent).catch(() => {})
       reject(new Error('Timed out waiting for torrent metadata (no peers?)'))
     }, timeoutMs)
 
-    const torrent = client.add(torrentId, { path: path.resolve(config.downloadDir), deselect: true }, (t) => {
+    const torrent = client.add(torrentId, { path: dir(), deselect: true }, (t) => {
       clearTimeout(timer)
       const file = pickFile(t.files, req)
       if (!file) {
-        client.remove(t, () => {})
+        removeAndDelete(t).catch(() => {})
         return reject(new Error('No playable video file in torrent'))
       }
       file.select()

@@ -3,12 +3,14 @@
 import path from 'node:path'
 import { config, saveDeviceKey } from './config.js'
 import { bestTv } from './tvmatch.js'
-import { castDevices, refreshCast, resolveHost, play as castPlay, stopCast, control as castControl } from './cast.js'
+import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, stopCast, control as castControl } from './cast.js'
 import { rokuDevices, rokuPlay, rokuOpenApp, rokuControl } from './roku.js'
 import { lgDevices, lgPlay, lgOpenApp, lgControl } from './lg.js'
 import { hasRenderer, dlnaPlay, dlnaControl } from './dlna.js'
 import { isSamsung, openApp as samsungOpenApp } from './samsung.js'
 import { searchSsdp } from './ssdp.js'
+
+export const onPlaybackFinished = (fn) => onCastFinished(() => { active = null; fn() })
 
 const lgKeys = {
   get: (ip) => config.lgKeys[ip],
