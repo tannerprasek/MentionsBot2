@@ -84,6 +84,10 @@
     <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="netflix"> Netflix</label>
     <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="disneyplus"> Disney+</label>
     <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="appletvplus"> Apple TV+</label>
+    <div class="grid">
+      <div><label for="s_disneyProfile">Disney+ profile to pick (1 = first, 0 = don't pick)</label><input type="number" id="s_disneyProfile" min="0" max="7"></div>
+      <div><label for="s_netflixProfile">Netflix profile to pick (1 = first, 0 = don't pick)</label><input type="number" id="s_netflixProfile" min="0" max="5"></div>
+    </div>
     <div class="full">
       <label for="token">Access token (only if API_TOKEN is set on the server)</label>
       <input type="password" id="token">
@@ -278,7 +282,7 @@ $('stopBtn').onclick = async () => { await api('/stop', { method: 'POST' }).catc
 
 // Settings
 let settings = {}
-const FIELDS = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'maxSizeGb', 'minSeeders', 'avoidHevc', 'allow4k']
+const FIELDS = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'maxSizeGb', 'minSeeders', 'avoidHevc', 'allow4k', 'disneyProfile', 'netflixProfile']
 function openSettings () { $('settings').classList.remove('hidden'); $('token').value = store.get('token') }
 $('settingsBtn').onclick = () => $('settings').classList.toggle('hidden') || openSettings()
 $('closeSettings').onclick = () => $('settings').classList.add('hidden')

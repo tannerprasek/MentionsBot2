@@ -102,12 +102,16 @@ export async function playOn (device, url, title, fileName) {
 }
 
 // Opens a streaming service's app on the TV. Throws when this TV can't be told to.
+// Which profile to pick on the app's "Who's watching?" screen (0 = don't pick).
+const profileFor = (service) => ({ netflix: config.netflixProfile, disneyplus: config.disneyProfile }[service] || 0)
+
 export async function openAppOn (device, service, url, isSeries) {
   const ip = await deviceIp(device)
-  if (device.kind === 'roku') return rokuOpenApp(ip, service, url, isSeries)
+  const profile = profileFor(service)
+  if (device.kind === 'roku') return rokuOpenApp(ip, service, url, isSeries, profile)
   if (device.kind === 'lg') return lgOpenApp(ip, service, url, lgKeys)
   if (await isSamsung(ip)) {
-    return samsungOpenApp(ip, service, url, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) })
+    return samsungOpenApp(ip, service, url, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t), profile })
   }
   throw new Error(`CastBot can't open apps on ${device.name}`)
 }

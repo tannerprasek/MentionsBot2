@@ -82,7 +82,11 @@ function connect (ip, token, onToken, channel = 'samsung.remote.control') {
           log('paired; saving the TV\'s token')
           onToken?.(msg.data.token)
         }
-        resolve(ws)
+        // Newer firmware drops commands sent before it announces the channel is ready.
+        const ready = setTimeout(() => resolve(ws), 2000)
+        ws.once('message', function onReady (r) {
+          if (String(r).includes('ms.channel.ready')) { clearTimeout(ready); resolve(ws) } else ws.once('message', onReady)
+        })
       }
     })
   })
@@ -118,7 +122,7 @@ async function restLaunch (ip, appId) {
     // Older firmware serves app launches under /ws/apps instead.
     res = await fetch(`http://${ip}:8001/ws/apps/${appId}`, { method: 'POST', signal: AbortSignal.timeout(5000) }).catch(() => res)
   }
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`.trim())
 }
 
 async function waitRunning (ip, appId) {
@@ -207,7 +211,30 @@ export function openApp (...args) {
   return run
 }
 
-async function openAppNow (ip, service, url, { token, onToken } = {}) {
+const described = new Set()
+async function describeTv (ip) {
+  if (described.has(ip)) return
+  described.add(ip)
+  try {
+    const d = (await (await fetch(`http://${ip}:8001/api/v2/`, { signal: AbortSignal.timeout(2500) })).json()).device || {}
+    log(`TV: ${d.modelName || '?'} (${d.name || '?'}), OS ${d.OS || '?'}, firmware ${d.firmwareVersion || '?'}, power ${d.PowerState || '?'}, Frame ${d.FrameTVSupport || '?'}, token auth ${d.TokenAuthSupport || '?'}`)
+  } catch {}
+}
+
+// Streaming apps open on a "Who's watching?" screen. Press Left to reach the first profile,
+// Right to the chosen one, then OK. profile 0 = leave the screen alone.
+async function pickProfile (ws, profile) {
+  if (!profile) return
+  log(`picking profile ${profile}`)
+  await sleep(7000) // let the app finish loading
+  for (let i = 0; i < 6; i++) { pressKey(ws, 'KEY_LEFT'); await sleep(300) }
+  for (let i = 1; i < profile; i++) { pressKey(ws, 'KEY_RIGHT'); await sleep(400) }
+  pressKey(ws, 'KEY_ENTER')
+  await sleep(500)
+}
+
+async function openAppNow (ip, service, url, { token, onToken, profile } = {}) {
+  await describeTv(ip)
   if (!APPS[service]) throw new Error(`No TV app known for ${service}`)
   log(`opening ${service} on ${ip}${token ? '' : ' (first time: accept the Allow prompt on the TV)'}`)
   const ws = await connect(ip, token, onToken)
@@ -229,11 +256,12 @@ async function openAppNow (ip, service, url, { token, onToken } = {}) {
     // Opening the app matters most; deep links (only reliable for Netflix) come after.
     const meta = deepLink(service, url)
     const attempts = []
+    // The REST launcher first: it answers on TVs whose remote socket ignores app commands.
+    for (const id of ids) attempts.push([`REST launch ${id}`, () => restLaunch(ip, id), id])
     for (const id of ids) {
       if (service === 'netflix' && meta) attempts.push([`deep link ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK', meta), id])
       attempts.push([`launch ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK'), id])
       attempts.push([`native launch ${id}`, () => wsLaunch(ws, id, 'NATIVE_LAUNCH'), id])
-      attempts.push([`REST launch ${id}`, () => restLaunch(ip, id), id])
     }
 
     let unverified = 0
@@ -245,17 +273,17 @@ async function openAppNow (ip, service, url, { token, onToken } = {}) {
         continue
       }
       const ok = await waitRunning(ip, id)
-      if (ok) { log(`${label}: app is running`); return }
+      if (ok) { log(`${label}: app is running`); await pickProfile(ws, profile); return }
       if (ok === null) {
         // This TV won't say whether the app opened; send a few variants, then stop.
         log(`${label}: sent (TV doesn't report running apps)`)
         await sleep(1500)
-        if (++unverified >= 3) return
+        if (++unverified >= 3) { await pickProfile(ws, profile); return }
         continue
       }
       log(`${label}: app didn't open`)
     }
-    if (unverified) return
+    if (unverified) { await pickProfile(ws, profile); return }
     throw new Error(`The TV didn't open ${service}`)
   } finally {
     await sleep(500)
