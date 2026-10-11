@@ -28,11 +28,17 @@ export const config = {
   allow4k: bool(process.env.ALLOW_4K, false),
   avoidHevc: bool(process.env.AVOID_HEVC, true),
   maxSizeGb: Number(process.env.MAX_SIZE_GB || 15),
-  minSeeders: Number(process.env.MIN_SEEDERS || 3)
+  minSeeders: Number(process.env.MIN_SEEDERS || 3),
+  // Services checked before torrenting; matching titles open in the TV's app instead.
+  streamingServices: (process.env.STREAMING_SERVICES ?? 'netflix,disneyplus,appletvplus').split(',').filter(Boolean),
+  streamingCountry: process.env.STREAMING_COUNTRY || 'US',
+  // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
+  samsungTokens: {}
 }
 
 // Settings saved from the web page; these override .env.
-export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders']
+export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry']
+const SAVED = [...EDITABLE, 'samsungTokens']
 
 try {
   Object.assign(config, JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')))
@@ -42,7 +48,20 @@ export function saveSettings (input) {
   for (const key of EDITABLE) {
     if (!(key in input)) continue
     const cur = config[key]
-    config[key] = typeof cur === 'boolean' ? Boolean(input[key]) : typeof cur === 'number' ? Number(input[key]) : String(input[key]).trim()
+    const v = input[key]
+    config[key] = Array.isArray(cur) ? [].concat(v).map(String)
+      : typeof cur === 'boolean' ? Boolean(v)
+        : typeof cur === 'number' ? Number(v)
+          : String(v).trim()
   }
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(Object.fromEntries(EDITABLE.map((k) => [k, config[k]])), null, 2))
+  writeSettings()
+}
+
+export function saveSamsungToken (ip, token) {
+  config.samsungTokens = { ...config.samsungTokens, [ip]: token }
+  writeSettings()
+}
+
+function writeSettings () {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(Object.fromEntries(SAVED.map((k) => [k, config[k]])), null, 2))
 }

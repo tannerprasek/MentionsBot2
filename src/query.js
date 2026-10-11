@@ -9,6 +9,9 @@ const pad = (n) => String(n).padStart(2, '0')
 
 export function parseRequest (text) {
   let t = text.trim().replace(/^(play|watch|stream|put on)\s+/i, '')
+  // "torrent <title>" skips the streaming-service check.
+  const force = /^torrent\s+/i.test(t)
+  t = t.replace(/^torrent\s+/i, '')
   let season, episode
 
   const sxe = t.match(/\bs(\d{1,2})\s*e(\d{1,3})\b/i)
@@ -26,5 +29,5 @@ export function parseRequest (text) {
   let query = title
   if (season && episode) query += ` S${pad(season)}E${pad(episode)}`
   else if (season) query += ` S${pad(season)}`
-  return { title, season, episode, query, isSeries: Boolean(season) }
+  return { title, season, episode, query, isSeries: Boolean(season), force }
 }

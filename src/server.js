@@ -1,13 +1,15 @@
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { config, EDITABLE, saveSettings } from './config.js'
+import { config, EDITABLE, saveSettings, saveSamsungToken } from './config.js'
 import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
-import { listDevices, pickDevice, play, stopCast, control } from './cast.js'
+import { findStreaming } from './streaming.js'
+import { isSamsung, openApp } from './samsung.js'
+import { listDevices, pickDevice, resolveHost, play, stopCast, control } from './cast.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -63,6 +65,36 @@ async function startPlayback (parsed, result, device) {
   }
 }
 
+// If the title is on one of the user's services, open that app on the TV instead of torrenting.
+// Returns true when it has sent the response.
+async function tryStreaming (parsed, tvName, res) {
+  setStatus({ state: 'searching', title: parsed.title })
+  const hit = await findStreaming(parsed, config.streamingServices, config.streamingCountry).catch((err) => {
+    console.error('[streaming]', err.message)
+    return null
+  })
+  if (!hit) return false
+
+  const { device } = await pickDevice(tvName, config.defaultTv)
+  const ip = device && await resolveHost(device.host).catch(() => null)
+  if (!ip || !(await isSamsung(ip))) {
+    setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url })
+    res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}. Open it in the ${hit.serviceName} app.` })
+    return true
+  }
+
+  const tv = device.friendlyName
+  await stopCast().catch(() => {})
+  await stopTorrent()
+  setStatus({ state: 'opening-app', title: hit.title, service: hit.serviceName, tv, url: hit.url })
+  res.json({ ok: true, streaming: hit, tv, speak: `${hit.title} is on ${hit.serviceName}. Opening it on ${tv}.` })
+
+  openApp(ip, hit.service, hit.url, { token: config.samsungTokens[ip], onToken: (t) => saveSamsungToken(ip, t) })
+    .then(() => setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, tv, url: hit.url }))
+    .catch((err) => setStatus({ state: 'error', title: hit.title, error: `Couldn't open ${hit.serviceName}: ${err.message}` }))
+  return true
+}
+
 app.get('/api/search', auth, async (req, res) => {
   if (!req.query.q) return res.status(400).json({ error: 'q is required' })
   const parsed = parseRequest(String(req.query.q))
@@ -92,6 +124,11 @@ app.post('/play', auth, async (req, res) => {
 
   const parsed = parseRequest(text)
   try {
+    if (!req.body?.link && !parsed.force && !req.body?.force) {
+      const handled = await tryStreaming(parsed, tvName, res)
+      if (handled) return
+    }
+
     let best
     if (req.body?.link) {
       best = { title: req.body.release || parsed.title, link: req.body.link, seeders: req.body.seeders }

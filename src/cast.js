@@ -20,7 +20,7 @@ resolver.on('response', (r) => {
 })
 resolver.on('error', (err) => console.error('[cast] mdns', err.message))
 
-async function resolveHost (host) {
+export async function resolveHost (host) {
   if (net.isIP(host)) return host
   const key = host.toLowerCase()
   if (!addresses.has(key)) {

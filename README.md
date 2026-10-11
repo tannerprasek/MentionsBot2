@@ -78,6 +78,15 @@ All endpoints except `/stream` need `Authorization: Bearer <API_TOKEN>` (or `?to
 
 Requests are parsed into queries: "season two episode 3" or "s2e3" becomes `S02E03`, and "season 1" becomes `S01` (a season pack; the matching episode file is chosen when an episode is given).
 
+## Streaming services first
+
+Before searching torrents, CastBot checks JustWatch's catalog for whether the title is on Netflix, Disney+ or Apple TV+ (choose which in Settings). If it is:
+
+- **Samsung TVs:** CastBot opens that service's app on the TV. The first time, the TV shows an **Allow** prompt for CastBot; accept it once. CastBot asks the app to go straight to the title, but some apps only open their home screen.
+- **Other TVs:** Siri and the page tell you which service has it.
+
+To torrent anyway, click **Play via torrent instead**, or start the request with "torrent", e.g. "torrent Stranger Things".
+
 ## Release selection
 
 Results with fewer than `MIN_SEEDERS` seeders, larger than `MAX_SIZE_GB`, CAM/TS rips, HEVC/x265 (when `AVOID_HEVC=true`), or 4K (unless `ALLOW_4K=true`) are dropped. The rest are ranked by seeders, a `PREFERRED_QUALITY` match, WEB-DL/BluRay sources, and MP4 files.
