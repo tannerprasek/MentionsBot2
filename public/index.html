@@ -59,7 +59,7 @@
 <body>
 <main>
   <header>
-    <h1>CastBot</h1>
+    <h1>CastBot <span class="small muted" id="ver" style="font-weight:400"></span></h1>
     <button class="icon" id="settingsBtn" title="Settings">⚙ Settings</button>
   </header>
 
@@ -299,6 +299,7 @@ $('saveSettings').onclick = async () => {
   } catch (err) { toast(err.message) }
 }
 
+fetch('/api/version').then((r) => r.json()).then((v) => { $('ver').textContent = 'v' + v.version }).catch(() => {})
 loadSettings().then(loadTvs)
 poll()
 </script>

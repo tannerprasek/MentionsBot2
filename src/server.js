@@ -6,8 +6,10 @@ import { parseRequest } from './query.js'
 import { search, resolveTorrent } from './search.js'
 import { startTorrent, stopTorrent, currentFile, stats } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
+import fs from 'node:fs'
 import { listDevices, waitForDevice, play, stopCast, control } from './cast.js'
 
+const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
@@ -60,6 +62,7 @@ async function startPlayback (parsed, result, tvName) {
     await play(device, url, parsed.title)
     setStatus({ state: 'playing', title: parsed.title, release: result.title, file: file.name, tv: device.friendlyName })
   } catch (err) {
+    console.error(err.stack)
     setStatus({ state: 'error', title: parsed.title, error: err.message })
   }
 }
@@ -136,10 +139,11 @@ app.post('/control/:action', auth, async (req, res) => {
   }
 })
 
+app.get('/api/version', (_req, res) => res.json({ version }))
 app.get('/devices', auth, (_req, res) => res.json(listDevices()))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats() }))
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`CastBot is running. Open http://localhost:${config.port} in Chrome`)
+  console.log(`CastBot v${version} is running. Open http://localhost:${config.port} in Chrome`)
   console.log(`(from your phone: http://${config.publicHost}:${config.port})`)
 })
