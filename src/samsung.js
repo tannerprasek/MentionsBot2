@@ -109,13 +109,13 @@ function wsLaunch (ws, appId, actionType, metaTag) {
   ws.send(JSON.stringify({ method: 'ms.channel.emit', params: { event: 'ed.apps.launch', to: 'host', data } }))
 }
 
-async function restLaunch (ip, appId, metaTag) {
-  const res = await fetch(`http://${ip}:8001/api/v2/applications/${appId}`, {
-    method: 'POST',
-    headers: { 'content-type': 'text/plain' },
-    body: metaTag || '',
-    signal: AbortSignal.timeout(5000)
-  })
+// Plain POST with no body is what Tizen's REST launcher accepts; a body makes some models answer 400.
+async function restLaunch (ip, appId) {
+  let res = await fetch(`http://${ip}:8001/api/v2/applications/${appId}`, { method: 'POST', signal: AbortSignal.timeout(5000) })
+  if (res.status === 400 || res.status === 401) {
+    // Older firmware serves app launches under /ws/apps instead.
+    res = await fetch(`http://${ip}:8001/ws/apps/${appId}`, { method: 'POST', signal: AbortSignal.timeout(5000) }).catch(() => res)
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
 
@@ -129,10 +129,24 @@ async function waitRunning (ip, appId) {
   return false
 }
 
-export async function openApp (ip, service, url, { token, onToken } = {}) {
+let queue = Promise.resolve()
+
+// One launch at a time; a second request waits for the first to finish.
+export function openApp (...args) {
+  const run = queue.then(() => openAppNow(...args))
+  queue = run.catch(() => {})
+  return run
+}
+
+async function openAppNow (ip, service, url, { token, onToken } = {}) {
   if (!APPS[service]) throw new Error(`No TV app known for ${service}`)
   log(`opening ${service} on ${ip}${token ? '' : ' (first time: accept the Allow prompt on the TV)'}`)
   const ws = await connect(ip, token, onToken)
+  // Show whatever the TV answers to launch commands (errors, acks), to see why a launch is refused.
+  ws.on('message', (raw) => {
+    const text = String(raw)
+    if (!text.includes('ed.installedApp.get')) log(`TV says: ${text.slice(0, 300)}`)
+  })
   try {
     // Prefer the ID the TV itself reports for the app, then the known IDs.
     const apps = await installedApps(ws)
@@ -149,7 +163,7 @@ export async function openApp (ip, service, url, { token, onToken } = {}) {
       if (service === 'netflix' && meta) attempts.push([`deep link ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK', meta), id])
       attempts.push([`launch ${id}`, () => wsLaunch(ws, id, 'DEEP_LINK'), id])
       attempts.push([`native launch ${id}`, () => wsLaunch(ws, id, 'NATIVE_LAUNCH'), id])
-      attempts.push([`REST launch ${id}`, () => restLaunch(ip, id, service === 'netflix' ? meta : ''), id])
+      attempts.push([`REST launch ${id}`, () => restLaunch(ip, id), id])
     }
 
     let unverified = 0
