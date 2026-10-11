@@ -95,6 +95,8 @@ Before searching torrents, CastBot checks JustWatch's catalog for whether the ti
 - **Samsung, LG and Roku TVs:** CastBot opens that service's app on the TV. The first time, Samsung and LG TVs show an **Allow** prompt for CastBot; accept it once. CastBot asks the app to go straight to the title, but some apps only open their home screen.
 - **Other TVs:** Siri and the page tell you which service has it.
 
+A Samsung Frame in Art Mode is switched to TV mode first (over its Art Mode API, or a Power press if the TV ignores that), both before opening an app and before casting.
+
 To torrent anyway, click **Play via torrent instead**, or start the request with "torrent", e.g. "torrent Stranger Things".
 
 ## Release selection

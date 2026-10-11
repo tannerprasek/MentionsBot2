@@ -7,7 +7,7 @@ import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay
 import { rokuDevices, rokuPlay, rokuOpenApp, rokuControl } from './roku.js'
 import { lgDevices, lgPlay, lgOpenApp, lgControl } from './lg.js'
 import { hasRenderer, dlnaPlay, dlnaControl } from './dlna.js'
-import { isSamsung, openApp as samsungOpenApp } from './samsung.js'
+import { isSamsung, exitArtMode, openApp as samsungOpenApp } from './samsung.js'
 import { searchSsdp } from './ssdp.js'
 
 export const onPlaybackFinished = (fn) => onCastFinished(() => { active = null; fn() })
@@ -77,6 +77,9 @@ export async function playOn (device, url, title, fileName) {
   await stopPlayback()
   const ip = await deviceIp(device)
   if (device.ref) {
+    if (device.kind === 'cast' && await isSamsung(ip)) {
+      await exitArtMode(ip, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) }).catch(() => {})
+    }
     try {
       await castPlay(device.ref, url, title)
       active = { ...device, ip, via: 'cast' }
