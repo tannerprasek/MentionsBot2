@@ -1,9 +1,44 @@
 import ChromecastAPI from 'chromecast-api'
+import mdns from 'multicast-dns'
+import dns from 'node:dns/promises'
+import net from 'node:net'
 
 const client = new ChromecastAPI()
 client.on('device', (d) => console.log(`[cast] found "${d.friendlyName}" at ${d.host}`))
 
 let active = null
+
+// Cast devices advertise a "<uuid>.local" host, which Windows can't resolve without Bonjour,
+// so keep our own table of the mDNS A records they announce.
+const addresses = new Map()
+const resolver = mdns()
+resolver.on('response', (r) => {
+  for (const a of [...r.answers, ...r.additionals]) {
+    if (a.type === 'A') addresses.set(a.name.toLowerCase(), a.data)
+  }
+})
+resolver.on('error', (err) => console.error('[cast] mdns', err.message))
+
+async function resolveHost (host) {
+  if (net.isIP(host)) return host
+  const key = host.toLowerCase()
+  if (!addresses.has(key)) {
+    resolver.query({ questions: [{ name: host, type: 'A' }] })
+    for (let i = 0; i < 30 && !addresses.has(key); i++) await new Promise((r) => setTimeout(r, 100))
+  }
+  if (addresses.has(key)) return addresses.get(key)
+  try {
+    return (await dns.lookup(host, { family: 4 })).address
+  } catch {
+    throw new Error(`Couldn't find the TV's IP address (${host})`)
+  }
+}
+
+// chromecast-api crashes reusing a client whose connection failed.
+function resetClient (device) {
+  try { device.client?.close() } catch {}
+  device.client = null
+}
 
 export function listDevices () {
   return client.devices.map((d) => ({ name: d.friendlyName, host: d.host }))
@@ -32,11 +67,18 @@ export async function waitForDevice (name, timeoutMs = 8000) {
   return null
 }
 
-export function play (device, url, title) {
+export async function play (device, url, title) {
+  device.host = await resolveHost(device.host)
+  resetClient(device)
   active = device
   return new Promise((resolve, reject) => {
     // Default Media Receiver plays H.264 MKVs when told they are video/mp4.
-    device.play({ url, contentType: 'video/mp4', cover: { title } }, (err) => (err ? reject(err) : resolve()))
+    device.play({ url, contentType: 'video/mp4', cover: { title } }, (err) => {
+      if (!err) return resolve()
+      resetClient(device)
+      active = null
+      reject(err)
+    })
   })
 }
 
