@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click to start CastBot on a Mac. Opens the page in Chrome.
+# Double-click to start CastBot on a Mac. Updates itself, then opens the page in Chrome.
 cd "$(dirname "$0")"
 
 if ! command -v node >/dev/null 2>&1; then
@@ -9,7 +9,23 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-[ -d node_modules ] || npm install --omit=dev
+ZIP="https://github.com/tannerprasek/MentionsBot2/archive/refs/heads/claude/polymarket-mispricing-bot-01LWTtedp1AEAh3X33y5Gps2.zip"
+TMP="$(mktemp -d)"
+echo "Checking for updates..."
+if curl -fsSL "$ZIP" -o "$TMP/castbot.zip" && unzip -q "$TMP/castbot.zip" -d "$TMP/x"; then
+  SRC="$(find "$TMP/x" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  OLD="$(shasum package-lock.json 2>/dev/null)"
+  rsync -a --exclude node_modules --exclude downloads --exclude settings.json --exclude .env --exclude "Start CastBot.command" "$SRC/" ./
+  [ "$OLD" != "$(shasum package-lock.json)" ] && touch .needs-install
+  echo "Up to date."
+else
+  echo "Couldn't check for updates. Starting the version you have."
+fi
+rm -rf "$TMP"
+
+if [ ! -d node_modules ] || [ -f .needs-install ]; then
+  npm install --omit=dev --loglevel=error --no-audit --no-fund && rm -f .needs-install
+fi
 
 (sleep 2; open -a "Google Chrome" "http://localhost:8787" 2>/dev/null || open "http://localhost:8787") &
 echo "CastBot is running. Keep this window open while you watch. Close it to stop."
