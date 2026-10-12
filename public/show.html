@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Episodes · CastBot</title>
+<style>
+  :root {
+    --bg: #f5f5f7; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #e2e2e7;
+    --accent: #0a66ff; --accent-text: #ffffff; --ok: #1a7f37; --err: #c62828; --chip: #eef2ff; --thumb: #dcdce2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #181b21; --text: #ececf1; --muted: #9a9aa6; --line: #2a2e37;
+      --accent: #4c8dff; --accent-text: #0b0d12; --ok: #4ac26b; --err: #ff6b6b; --chip: #1f2633; --thumb: #252a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 120px; }
+  a { color: var(--accent); text-decoration: none; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 14px; }
+  .hero { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+  .hero img { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; background: var(--thumb); flex: none; }
+  .hero h1 { margin: 2px 0 4px; font-size: 24px; letter-spacing: -0.02em; line-height: 1.15; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  select, button { font: inherit; color: inherit; }
+  select { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+  .continue { display: flex; gap: 12px; align-items: center; padding: 12px; width: 100%; border: none; text-align: left; cursor: pointer; background: var(--panel); }
+  .continue .thumb { width: 120px; }
+  .continue strong { display: block; }
+  .play { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 16px; margin-left: auto; }
+  details > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::after { content: "›"; margin-left: auto; font-size: 22px; color: var(--muted); transition: transform .15s; }
+  details[open] > summary::after { transform: rotate(90deg); }
+  details > summary .muted { font-weight: 400; font-size: 13px; }
+  .ep { display: flex; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; cursor: pointer; }
+  .ep:active, .continue:active { background: var(--chip); }
+  .thumb { position: relative; width: 132px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--thumb); flex: none; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.35); }
+  .thumb .bar > div { height: 100%; background: var(--accent); }
+  .thumb .done { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; }
+  .ep .info { min-width: 0; flex: 1; }
+  .ep .name { font-weight: 600; overflow-wrap: anywhere; }
+  .ep .sum { -webkit-line-clamp: 2; }
+  .ep.watched .name { color: var(--muted); }
+  #now { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: none; }
+  #now.show { display: block; }
+  #now .inner { max-width: 760px; margin: 0 auto; }
+  #now .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  #now button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+  .state.error { color: var(--err); }
+  .state.playing { color: var(--ok); }
+  #toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 5; }
+  #toast.show { opacity: 1; }
+  .skeleton { padding: 40px 0; text-align: center; }
+  @media (max-width: 420px) { .thumb { width: 112px; } .continue .thumb { width: 104px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="/">‹ CastBot</a><span class="muted small" id="ver"></span></div>
+  <div id="content" class="skeleton muted">Loading episodes…</div>
+</main>
+
+<div id="now"><div class="inner">
+  <strong id="nowTitle" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></strong>
+  <div class="state small" id="nowState"></div>
+  <div class="small muted" id="nowSub"></div>
+  <div class="btns">
+    <button data-act="pause">❚❚</button>
+    <button data-act="resume">▶</button>
+    <button id="nextBtn">⏭ Next</button>
+    <button id="stopBtn">■ Stop</button>
+  </div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const qs = new URLSearchParams(location.search)
+const store = {
+  get (k) { try { return localStorage.getItem(k) || '' } catch { return '' } },
+  set (k, v) { try { localStorage.setItem(k, v) } catch {} }
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+let toastTimer
+function toast (msg) {
+  $('toast').textContent = msg
+  $('toast').classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3500)
+}
+
+async function api (path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' }
+  const token = store.get('token')
+  if (token) headers.Authorization = 'Bearer ' + token
+  const res = await fetch(path, { ...opts, headers, body: opts.body && JSON.stringify(opts.body) })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || data.speak || 'HTTP ' + res.status)
+  return data
+}
+
+let show = null
+
+function thumb (ep, progress, cls = 'thumb') {
+  const pct = progress && progress.duration && !progress.finished ? Math.min(100, progress.position / progress.duration * 100) : 0
+  return `<div class="${cls}">${ep.image ? `<img loading="lazy" src="${esc(ep.image)}" alt="">` : ''}` +
+    (pct > 1 ? `<div class="bar"><div style="width:${pct}%"></div></div>` : '') +
+    (progress && progress.finished ? '<span class="done">✓ Watched</span>' : '') + '</div>'
+}
+
+function render () {
+  const w = show.watched || { episodes: {}, continue: null }
+  const prog = (e) => w.episodes[`${e.season}x${e.number}`]
+  const all = show.seasons.flatMap((s) => s.episodes)
+  const cont = w.continue && all.find((e) => e.season === w.continue.season && e.number === w.continue.episode)
+  const openSeason = cont ? cont.season : show.seasons[0]?.season
+
+  let html = `<div class="hero">${show.poster ? `<img src="${esc(show.poster)}" alt="">` : ''}
+    <div><h1>${esc(show.name)}</h1><div class="muted small">${[show.year, show.seasons.length + ' season' + (show.seasons.length === 1 ? '' : 's'), all.length + ' episodes'].filter(Boolean).join(' · ')}</div>
+    <div class="small muted clamp" style="margin-top:6px">${esc(show.summary)}</div></div></div>
+    <div class="panel" style="padding:10px 12px"><label class="small muted" for="tv">Play on</label><select id="tv"><option>Loading TVs…</option></select></div>`
+
+  if (cont) {
+    html += `<div class="panel"><button class="continue" data-s="${cont.season}" data-e="${cont.number}">
+      ${thumb(cont, prog(cont))}
+      <span style="min-width:0"><span class="small muted">${prog(cont) && !prog(cont).finished && prog(cont).position > 60 ? 'Continue' : 'Up next'} · S${cont.season} E${cont.number}</span><strong>${esc(cont.name)}</strong></span>
+      <span class="play">▶</span></button></div>`
+  }
+
+  for (const s of show.seasons) {
+    const watched = s.episodes.filter((e) => prog(e)?.finished).length
+    html += `<details class="panel" ${s.season === openSeason ? 'open' : ''}>
+      <summary>Season ${s.season} <span class="muted">${s.episodes.length} episodes${watched ? ` · ${watched} watched` : ''}</span></summary>
+      ${s.episodes.map((e) => {
+        const p = prog(e)
+        const meta = [e.airdate && new Date(e.airdate + 'T12:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }), e.runtime && e.runtime + ' min'].filter(Boolean).join(' · ')
+        return `<button class="ep${p?.finished ? ' watched' : ''}" data-s="${e.season}" data-e="${e.number}">
+          ${thumb(e, p)}
+          <span class="info"><span class="name">${e.number}. ${esc(e.name)}</span>
+          <span class="small muted" style="display:block">${esc(meta)}</span>
+          <span class="small muted clamp sum">${esc(e.summary)}</span></span></button>`
+      }).join('')}
+    </details>`
+  }
+  $('content').className = ''
+  $('content').innerHTML = html
+  document.querySelectorAll('[data-s]').forEach((b) => { b.onclick = () => playEpisode(Number(b.dataset.s), Number(b.dataset.e)) })
+  loadTvs()
+}
+
+async function loadTvs () {
+  try {
+    const tvs = await api('/tvs')
+    const want = qs.get('tv') || store.get('tv')
+    const sel = $('tv')
+    sel.innerHTML = tvs.length ? tvs.map((n) => `<option ${n === want ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option value="">No TVs found</option>'
+    sel.onchange = () => store.set('tv', sel.value)
+  } catch (err) { toast(err.message) }
+}
+
+let starting = false
+async function playEpisode (season, episode) {
+  if (starting) return
+  starting = true
+  try {
+    const r = await api('/play', { method: 'POST', body: { title: `${show.name} season ${season} episode ${episode}`, tv: $('tv').value, force: true } })
+    toast(r.speak || 'Starting…')
+    poll()
+  } catch (err) { toast(err.message) } finally { setTimeout(() => { starting = false }, 1500) }
+}
+
+// Now-playing bar
+const clock = (sec) => { sec = Math.round(sec || 0); const m = Math.floor(sec / 60); return m + ':' + String(sec % 60).padStart(2, '0') }
+const STATE = { searching: 'Searching…', connecting: 'Connecting…', buffering: 'Buffering…', playing: 'Playing', error: 'Error', streaming: '' }
+let pollTimer
+async function poll () {
+  clearTimeout(pollTimer)
+  try {
+    const s = await api('/status')
+    // Errors only linger for two minutes so an old failure doesn't sit over the guide.
+    const stale = s.state === 'error' && Date.now() - new Date(s.at).getTime() > 120_000
+    const active = s.state && !['idle', 'streaming'].includes(s.state) && !stale
+    $('now').classList.toggle('show', active)
+    if (active) {
+      $('nowTitle').textContent = [s.title, s.season && s.episode ? `S${s.season}E${s.episode}` : ''].filter(Boolean).join(' · ')
+      $('nowState').textContent = s.state === 'error' ? s.error : s.state === 'buffering' ? `Buffering… ${s.buffered || 0}%` : STATE[s.state] || s.state
+      $('nowState').className = 'state small ' + s.state
+      document.querySelector('#now .btns').style.display = s.state === 'error' ? 'none' : ''
+      const p = s.progress
+      $('nowSub').textContent = [s.tv && 'on ' + s.tv, p && p.duration ? `${clock(p.position)} / ${clock(p.duration)}` : ''].filter(Boolean).join(' · ')
+    }
+    pollTimer = setTimeout(poll, active ? 3000 : 10000)
+  } catch { pollTimer = setTimeout(poll, 8000) }
+}
+document.querySelectorAll('[data-act]').forEach((b) => { b.onclick = () => api('/control/' + b.dataset.act, { method: 'POST', body: {} }).catch((e) => toast(e.message)) })
+$('nextBtn').onclick = async () => { const r = await api('/next', { method: 'POST' }).catch((e) => ({ speak: e.message })); toast(r.speak); poll() }
+$('stopBtn').onclick = async () => { await api('/stop', { method: 'POST' }).catch(() => {}); poll() }
+
+async function load () {
+  try {
+    show = await api('/api/show/' + encodeURIComponent(qs.get('id')))
+    document.title = show.name + ' · CastBot'
+    render()
+  } catch (err) {
+    $('content').textContent = "Couldn't load episodes: " + err.message
+  }
+}
+fetch('/api/version').then((r) => r.json()).then((v) => { $('ver').textContent = 'v' + v.version }).catch(() => {})
+load()
+poll()
+// Refresh watched marks when coming back to the page.
+document.addEventListener('visibilitychange', () => { if (!document.hidden && show) api('/api/show/' + show.id).then((d) => { show = d; render() }).catch(() => {}) })
+</script>
+</body>
+</html>

@@ -55,6 +55,7 @@ Open the Shortcuts app on your iPhone, create a new shortcut, and name it **Cast
    - Request Body: JSON, with `title` = *Provided Input* and `tv` = *Chosen Item*
 4. **Get Dictionary Value**: key `speak` from *Contents of URL*
 5. **Speak Text**: *Dictionary Value*
+6. **Get Dictionary Value**: key `url` from *Contents of URL*, then **If** *Dictionary Value* **has any value** → **Open URLs** *Dictionary Value* (opens the episode guide when you only named a show)
 
 Then say: "Hey Siri, CastBot" → "Breaking Bad season 2 episode 3" → "Bedroom TV".
 
@@ -105,7 +106,7 @@ To torrent anyway, click **Play via torrent instead**, or start the request with
 ## Watching shows
 
 - **Resume:** CastBot saves where you are every 10 seconds. Asking for the same movie or episode again picks up there (Chromecast and LG; Roku always starts from the beginning). Add "from the start" to skip that.
-- **Continue a show:** asking for just the show name ("Bluey") plays the episode you left unfinished, or the one after the last you finished.
+- **Episode guide:** asking for just a show's name ("torrent Bluey", or any show not on your services) sends back a link to an episode guide: collapsible seasons, thumbnails, what you've watched, and a Continue button. Tap an episode to play it on the chosen TV. Show data and thumbnails come from TVmaze and are cached in `cache/`.
 - **Next episode:** "CastBot Next" (or ⏭ on the page) plays the following episode on the same TV. With **Play the next episode automatically** on in Settings, it starts by itself when an episode ends.
 - **No waiting between episodes:** 10 minutes before an episode ends, the next one starts downloading in the background. If you're watching from a season pack, it's already there.
 - **No early stalls:** CastBot downloads the start (or the resume point) and the end of the file before it starts the TV.

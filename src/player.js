@@ -59,6 +59,19 @@ export function plan (parsed) {
   return { parsed: out, resume: resumePoint(keyOf(out.title, out.season, out.episode), out) }
 }
 
+// What's been watched of a show, for the episode guide: progress per "SxE" and where to continue.
+export function watchState (title) {
+  const t = norm(title)
+  const episodes = {}
+  for (const [k, v] of Object.entries(history.items)) {
+    const m = k.match(/^(.*) s(\d+)e(\d+)$/)
+    if (m && m[1] === t) episodes[`${m[2]}x${m[3]}`] = { position: v.position, duration: v.duration, finished: Boolean(v.finished) }
+  }
+  const show = history.shows[t]
+  const next = show && (show.finished ? { season: show.season, episode: show.episode + 1 } : { season: show.season, episode: show.episode })
+  return { episodes, continue: next || null }
+}
+
 // --- Playback ---
 
 let now = null // { title, season, episode, isSeries, key, device, release, fileName, nearEnd, preloadStarted }

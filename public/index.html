@@ -210,6 +210,7 @@ async function playBest () {
   $('playBest').disabled = true
   try {
     const r = await api('/play', { method: 'POST', body: { title: query(), tv: $('tv').value } })
+    if (r.guidePath) { location.href = r.guidePath; return }
     toast(r.speak)
     poll()
   } catch (err) { toast(err.message) } finally { $('playBest').disabled = false }

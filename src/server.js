@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import { findStreaming } from './streaming.js'
 import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
 import * as player from './player.js'
+import { findShow, getShow, cachedImage } from './shows.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -125,7 +126,19 @@ app.post('/play', auth, async (req, res) => {
       if (handled) return
     }
 
-    // A bare show name continues where you left off; a known episode resumes mid-way.
+    // Just a show's name: send back a link to the episode guide instead of guessing an episode.
+    if (!parsed.season && !req.body?.link && !req.body?.noGuide) {
+      const show = await findShow(parsed.title).catch((err) => { console.error('[shows]', err.message); return null })
+      if (show) {
+        const guidePath = `/show.html?id=${show.id}${tvName ? `&tv=${encodeURIComponent(tvName)}` : ''}`
+        const url = `http://${config.publicHost}:${config.port}${guidePath}`
+        setStatus({ state: 'idle' })
+        console.log(`[shows] ${show.name}: sending the episode guide`)
+        return res.json({ ok: true, guide: true, url, guidePath, speak: `Pick an episode of ${show.name} on your phone.` })
+      }
+    }
+
+    // A known episode resumes mid-way.
     const { parsed: planned, resume } = player.plan(parsed)
 
     let best
@@ -176,6 +189,26 @@ app.post('/next', auth, async (_req, res) => {
     res.json(await player.playNext())
   } catch (err) {
     res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}` })
+  }
+})
+
+// Episode guide data: seasons/episodes from TVmaze plus what's been watched.
+app.get('/api/show/:id', auth, async (req, res) => {
+  try {
+    const show = await getShow(req.params.id)
+    if (!show) return res.status(404).json({ error: 'show not found' })
+    res.json({ ...show, watched: player.watchState(show.name) })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+app.get('/api/img', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'public, max-age=604800')
+    res.sendFile(await cachedImage(String(req.query.u)))
+  } catch {
+    res.sendStatus(404)
   }
 })
 
