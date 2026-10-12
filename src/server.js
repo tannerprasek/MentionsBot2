@@ -11,6 +11,7 @@ import { findStreaming } from './streaming.js'
 import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
 import * as player from './player.js'
 import { findShow, getShow, cachedImage } from './shows.js'
+import { SHORTCUTS, buildShortcut, bySlug, slug, macInstaller } from './shortcuts.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const app = express()
@@ -211,6 +212,19 @@ app.get('/api/img', async (req, res) => {
     res.sendStatus(404)
   }
 })
+
+// Siri Shortcuts with this CastBot's address built in, and a Mac script that signs them all.
+const baseUrl = () => `http://${config.publicHost}:${config.port}`
+app.get('/shortcuts', (_req, res) => res.json(Object.entries(SHORTCUTS).map(([name, [about]]) => ({ name, about, file: `/shortcuts/${slug(name)}` }))))
+app.get('/shortcuts/:slug', (req, res) => {
+  const name = bySlug(req.params.slug)
+  if (!name) return res.sendStatus(404)
+  res.set('Content-Type', 'application/octet-stream')
+  res.set('Content-Disposition', `attachment; filename="${name.replace(/'/g, '')}.shortcut"`)
+  res.send(buildShortcut(name, baseUrl()))
+})
+app.get('/siri.sh', (_req, res) => res.type('text/plain').send(macInstaller(baseUrl())))
+app.get('/api/address', (_req, res) => res.json({ base: baseUrl() }))
 
 // "What's playing?" for Siri.
 app.get('/now', auth, (_req, res) => res.json({ ...status, progress: player.progress(), speak: player.describe(status) }))

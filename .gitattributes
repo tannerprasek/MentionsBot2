@@ -1,3 +1,5 @@
 * text=auto
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+*.command text eol=lf
+*.shortcut binary

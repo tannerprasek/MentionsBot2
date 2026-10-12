@@ -1,11 +1,12 @@
 {
   "name": "castbot",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Siri -> torrent -> Chromecast streaming server",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:shortcuts": "node scripts/build-shortcuts.js"
   },
   "repository": {
     "type": "git",

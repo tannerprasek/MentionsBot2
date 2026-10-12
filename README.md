@@ -9,17 +9,19 @@ Siri Shortcut ──POST /play──▶ CastBot server ──Torznab──▶ Pr
                                    └─ Chromecast (mDNS discovery, Default Media Receiver)
 ```
 
-## Quick start (no Terminal)
+## Quick start
 
-1. Install [Node.js](https://nodejs.org/en/download) and [Prowlarr](https://prowlarr.com) on a computer that's on the same Wi-Fi as your TVs. In Prowlarr, add your indexers.
-2. Download this repo (green **Code** button → **Download ZIP**) and unzip it.
-3. Double-click **Start CastBot.command** (Mac) or **Start CastBot.bat** (Windows). Chrome opens the CastBot page.
-4. CastBot finds Prowlarr on its own. The line under the search buttons lists the indexers it will search.
-5. Type a movie or show, pick a TV, and click **▶ Play best match**.
+**Download:** https://github.com/tannerprasek/MentionsBot2/archive/refs/heads/claude/polymarket-mispricing-bot-01LWTtedp1AEAh3X33y5Gps2.zip
 
-On a Mac, the first time, right-click **Start CastBot.command** → **Open** if macOS blocks it.
+1. Install [Prowlarr](https://prowlarr.com) on a computer that's on the same Wi-Fi as your TVs, and add your indexers in it.
+2. Unzip the download and double-click **Start CastBot.bat** (Windows) or **Start CastBot.command** (Mac).
+   - No Node.js? The launcher downloads a private copy into the CastBot folder the first time.
+   - Windows: if "Windows protected your PC" appears, click **More info → Run anyway**; if the firewall asks, allow **Private networks**.
+   - Mac: if macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway**.
+3. Chrome opens CastBot. It finds Prowlarr and your TVs by itself; set a **Default TV** in **⚙ Settings**.
+4. **Siri:** click **🎙 Set up Siri** on the CastBot page and follow it. On a Mac, one Terminal line downloads, signs and opens all six shortcuts (CastBot, Next, What's Playing, Pause, Resume, Stop) with your PC's address filled in. The **Siri Shortcuts** folder in the download has the same shortcuts (they ask for the address) and a **Sign and Add (Mac).command** helper.
 
-From your phone, open the second address the launcher window prints (`http://192.168.x.x:8787`).
+Each start checks GitHub for updates and keeps your settings, history and downloads.
 
 ## Requirements
 
