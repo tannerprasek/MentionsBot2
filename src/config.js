@@ -3,13 +3,28 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-function lanIp () {
-  for (const ifaces of Object.values(os.networkInterfaces())) {
+// The home-network address TVs and phones can reach. Skips VPN/virtual adapters (Tailscale's
+// 100.64.0.0/10, Hyper-V/WSL, VirtualBox, VMware, Docker) and prefers private LAN ranges.
+const VIRTUAL = /tailscale|zerotier|vethernet|hyper-v|wsl|virtualbox|vmware|vbox|docker|loopback|utun|tun|tap|wireguard|vpn/i
+function rank (name, ip) {
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip) || ip.startsWith('169.254.')) return 0 // CGNAT/VPN, link-local
+  if (VIRTUAL.test(name)) return 1
+  if (/^192\.168\./.test(ip)) return 4
+  if (/^10\./.test(ip)) return 4
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 3
+  return 2
+}
+export function lanAddresses () {
+  const out = []
+  for (const [name, ifaces] of Object.entries(os.networkInterfaces())) {
     for (const i of ifaces || []) {
-      if (i.family === 'IPv4' && !i.internal) return i.address
+      if (i.family === 'IPv4' && !i.internal) out.push({ name, address: i.address, rank: rank(name, i.address) })
     }
   }
-  return '127.0.0.1'
+  return out.sort((a, b) => b.rank - a.rank)
+}
+function lanIp () {
+  return lanAddresses()[0]?.address || '127.0.0.1'
 }
 
 const bool = (v, d) => (v === undefined ? d : /^(1|true|yes)$/i.test(v))

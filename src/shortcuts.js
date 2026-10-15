@@ -40,7 +40,7 @@ function wrap (actions, base, color, glyph) {
     WFWorkflowIcon: { WFWorkflowIconStartColor: color, WFWorkflowIconGlyphNumber: glyph },
     WFWorkflowImportQuestions: base
       ? []
-      : [{ ActionIndex: 0, Category: 'Parameter', ParameterKey: 'WFTextActionText', DefaultValue: 'http://192.168.1.10:8787', Text: "CastBot's address (the \"from your phone\" line in the CastBot window)" }],
+      : [{ ActionIndex: 0, Category: 'Parameter', ParameterKey: 'WFTextActionText', DefaultValue: 'http://castbot.local:8787', Text: "CastBot's address (leave as is, or use the \"from your phone\" address in the CastBot window)" }],
     WFWorkflowInputContentItemClasses: ['WFStringContentItem'],
     WFWorkflowOutputContentItemClasses: [],
     WFWorkflowTypes: ['Watch'],
@@ -51,7 +51,7 @@ function wrap (actions, base, color, glyph) {
 }
 
 // The address step every shortcut starts with.
-const addressStep = (uid, base) => act('gettext', { UUID: uid, CustomOutputName: 'CastBot', WFTextActionText: text(base || 'http://192.168.1.10:8787') })
+const addressStep = (uid, base) => act('gettext', { UUID: uid, CustomOutputName: 'CastBot', WFTextActionText: text(base || 'http://castbot.local:8787') })
 
 // GET or POST one CastBot endpoint, then have Siri read its "speak" reply.
 function simple (base, path, method) {

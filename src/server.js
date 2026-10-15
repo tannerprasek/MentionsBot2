@@ -1,7 +1,8 @@
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { config, EDITABLE, saveSettings } from './config.js'
+import { config, EDITABLE, saveSettings, lanAddresses } from './config.js'
+import { HOSTNAME } from './announce.js'
 import { parseRequest } from './query.js'
 import { search } from './search.js'
 import { currentFile, stats, clearDownloads } from './torrent.js'
@@ -132,7 +133,8 @@ app.post('/play', auth, async (req, res) => {
       const show = await findShow(parsed.title).catch((err) => { console.error('[shows]', err.message); return null })
       if (show) {
         const guidePath = `/show.html?id=${show.id}${tvName ? `&tv=${encodeURIComponent(tvName)}` : ''}`
-        const url = `http://${config.publicHost}:${config.port}${guidePath}`
+        // Link back through whatever address the phone used (LAN, castbot.local or Tailscale).
+        const url = `http://${req.get('host') || `${config.publicHost}:${config.port}`}${guidePath}`
         setStatus({ state: 'idle' })
         console.log(`[shows] ${show.name}: sending the episode guide`)
         return res.json({ ok: true, guide: true, url, guidePath, speak: `Pick an episode of ${show.name} on your phone.` })
@@ -214,7 +216,8 @@ app.get('/api/img', async (req, res) => {
 })
 
 // Siri Shortcuts with this CastBot's address built in, and a Mac script that signs them all.
-const baseUrl = () => `http://${config.publicHost}:${config.port}`
+// Shortcuts use the castbot.local name so they survive the PC's IP changing.
+const baseUrl = () => `http://${HOSTNAME}:${config.port}`
 app.get('/shortcuts', (_req, res) => res.json(Object.entries(SHORTCUTS).map(([name, [about]]) => ({ name, about, file: `/shortcuts/${slug(name)}` }))))
 app.get('/shortcuts/:slug', (req, res) => {
   const name = bySlug(req.params.slug)
@@ -224,7 +227,7 @@ app.get('/shortcuts/:slug', (req, res) => {
   res.send(buildShortcut(name, baseUrl()))
 })
 app.get('/siri.sh', (_req, res) => res.type('text/plain').send(macInstaller(baseUrl())))
-app.get('/api/address', (_req, res) => res.json({ base: baseUrl() }))
+app.get('/api/address', (_req, res) => res.json({ base: baseUrl(), ip: `http://${config.publicHost}:${config.port}` }))
 
 // "What's playing?" for Siri.
 app.get('/now', auth, (_req, res) => res.json({ ...status, progress: player.progress(), speak: player.describe(status) }))
@@ -251,5 +254,7 @@ app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats(), 
 
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`CastBot v${version} is running. Open http://localhost:${config.port} in Chrome`)
-  console.log(`(from your phone: http://${config.publicHost}:${config.port})`)
+  console.log(`(from your phone: http://${HOSTNAME}:${config.port} or http://${config.publicHost}:${config.port})`)
+  const others = lanAddresses().slice(1).map((a) => `${a.address} (${a.name})`)
+  if (others.length) console.log(`(not used for TVs: ${others.join(', ')})`)
 })

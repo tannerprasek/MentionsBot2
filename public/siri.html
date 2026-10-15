@@ -57,14 +57,15 @@
   </div>
 
   <div class="panel small muted">
-    If your PC's address changes, run the command again, or edit the first step (the address) inside each shortcut.
+    The shortcuts reach CastBot by the name <code>castbot.local</code>, so they keep working when your PC's IP changes. If they can't connect, edit the first step in each shortcut to the IP address instead: <code id="ip">…</code>
   </div>
 </main>
 <script>
 const $ = (id) => document.getElementById(id)
-fetch('/api/address').then((r) => r.json()).then(({ base }) => {
+fetch('/api/address').then((r) => r.json()).then(({ base, ip }) => {
   $('base').textContent = base
   $('cmd').textContent = `curl -s ${base}/siri.sh | bash`
+  $('ip').textContent = ip
 })
 fetch('/shortcuts').then((r) => r.json()).then((list) => {
   $('list').innerHTML = list.map((s) => `<li><span><b>${s.name}</b><br><span class="small muted">${s.about}</span></span><a href="${s.file}">Download</a></li>`).join('')

@@ -25,9 +25,9 @@
 			<key>ParameterKey</key>
 			<string>WFTextActionText</string>
 			<key>DefaultValue</key>
-			<string>http://192.168.1.10:8787</string>
+			<string>http://castbot.local:8787</string>
 			<key>Text</key>
-			<string>CastBot's address (the "from your phone" line in the CastBot window)</string>
+			<string>CastBot's address (leave as is, or use the "from your phone" address in the CastBot window)</string>
 		</dict>
 	</array>
 	<key>WFWorkflowInputContentItemClasses</key>
@@ -52,7 +52,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>6ADE5AD1-4B73-42DF-9C61-73ED814FCA1C</string>
+				<string>DF78B189-A711-49F1-B2DE-AA390AAACF6D</string>
 				<key>CustomOutputName</key>
 				<string>CastBot</string>
 				<key>WFTextActionText</key>
@@ -60,7 +60,7 @@
 					<key>Value</key>
 					<dict>
 						<key>string</key>
-						<string>http://192.168.1.10:8787</string>
+						<string>http://castbot.local:8787</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenString</string>
@@ -73,7 +73,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>8B44B5BC-524A-48F5-927C-C7E253CBAEF8</string>
+				<string>51390D61-4B50-4565-A789-FC9B7B39B9E2</string>
 				<key>CustomOutputName</key>
 				<string>CastBot Reply</string>
 				<key>WFURL</key>
@@ -89,7 +89,7 @@
 								<key>Type</key>
 								<string>ActionOutput</string>
 								<key>OutputUUID</key>
-								<string>6ADE5AD1-4B73-42DF-9C61-73ED814FCA1C</string>
+								<string>DF78B189-A711-49F1-B2DE-AA390AAACF6D</string>
 								<key>OutputName</key>
 								<string>CastBot</string>
 							</dict>
@@ -108,7 +108,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>D76EDDD5-1BF8-46D8-9927-4D129D5ED641</string>
+				<string>0B46A624-E4A3-41CC-B9CF-2C3405BFF762</string>
 				<key>CustomOutputName</key>
 				<string>Message</string>
 				<key>WFInput</key>
@@ -118,7 +118,7 @@
 						<key>Type</key>
 						<string>ActionOutput</string>
 						<key>OutputUUID</key>
-						<string>8B44B5BC-524A-48F5-927C-C7E253CBAEF8</string>
+						<string>51390D61-4B50-4565-A789-FC9B7B39B9E2</string>
 						<key>OutputName</key>
 						<string>CastBot Reply</string>
 					</dict>
@@ -147,7 +147,7 @@
 								<key>Type</key>
 								<string>ActionOutput</string>
 								<key>OutputUUID</key>
-								<string>D76EDDD5-1BF8-46D8-9927-4D129D5ED641</string>
+								<string>0B46A624-E4A3-41CC-B9CF-2C3405BFF762</string>
 								<key>OutputName</key>
 								<string>Message</string>
 							</dict>
