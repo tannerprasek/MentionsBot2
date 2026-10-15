@@ -115,6 +115,10 @@ To torrent anyway, click **Play via torrent instead**, or start the request with
 
 History is kept in `history.json` next to CastBot.
 
+## NHL games
+
+Ask for a team ("Winnipeg Jets", "Jets", "Leafs game", "is the Oilers game on") and CastBot answers from the NHL's public schedule: the live score and clock, today's start time, or the next game, plus the TV channels carrying it (Canada and US). Team names that are also titles ("Predators", "Wild", "Kings") need a hint like the city or "game".
+
 ## Release selection
 
 Results with fewer than `MIN_SEEDERS` seeders, larger than `MAX_SIZE_GB`, CAM/TS rips, HEVC/x265 (when `AVOID_HEVC=true`), or 4K (unless `ALLOW_4K=true`) are dropped. The rest are ranked by seeders, a `PREFERRED_QUALITY` match, WEB-DL/BluRay sources, and MP4 files.

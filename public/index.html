@@ -243,7 +243,7 @@ async function showResults () {
 }
 
 // Now playing
-const STATE_TEXT = { buffering: 'Buffering…', streaming: 'On a streaming service', searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
+const STATE_TEXT = { game: 'NHL', buffering: 'Buffering…', streaming: 'On a streaming service', searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
 let pollTimer
 async function poll () {
   clearTimeout(pollTimer)
@@ -255,11 +255,11 @@ async function poll () {
       $('nowTitle').textContent = s.title || ''
       const ep = s.season && s.episode ? `S${s.season}E${s.episode}` : ''
       $('nowRelease').textContent = [ep, s.release, s.tv && 'on ' + s.tv].filter(Boolean).join(' · ')
-      const inApp = s.state === 'streaming'
-      $('appRow').classList.toggle('hidden', !inApp)
+      const inApp = s.state === 'streaming' || s.state === 'game'
+      $('appRow').classList.toggle('hidden', !inApp || s.state === 'game')
       $('castRow').classList.toggle('hidden', inApp)
       $('nowBarWrap').classList.toggle('hidden', inApp)
-      if (inApp) $('nowRelease').textContent = 'On ' + s.service
+      if (inApp) $('nowRelease').textContent = s.state === 'game' ? '' : 'On ' + s.service
       $('nowState').textContent = s.state === 'error' ? s.error : STATE_TEXT[s.state] || s.state
       $('nowState').className = 'state ' + s.state
       const t = s.torrent

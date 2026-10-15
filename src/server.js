@@ -12,6 +12,7 @@ import { findStreaming } from './streaming.js'
 import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
 import * as player from './player.js'
 import { findShow, getShow, cachedImage } from './shows.js'
+import { findTeam, gameReport } from './sports.js'
 import { SHORTCUTS, buildShortcut, bySlug, slug, macInstaller } from './shortcuts.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -123,6 +124,17 @@ app.post('/play', auth, async (req, res) => {
 
   const parsed = parseRequest(text)
   try {
+    // An NHL team ("Winnipeg Jets", "leafs game"): say whether it's on, the score, and the channels.
+    if (!req.body?.link && !parsed.season) {
+      const team = await findTeam(text).catch((err) => { console.error('[sports]', err.message); return null })
+      if (team) {
+        const report = await gameReport(team)
+        console.log(`[sports] ${team.name}: ${report.speak}`)
+        setStatus({ state: 'game', title: team.name, note: report.speak })
+        return res.json({ ok: true, game: report.state, speak: report.speak })
+      }
+    }
+
     if (!req.body?.link && !parsed.force && !req.body?.force) {
       const handled = await tryStreaming(parsed, res)
       if (handled) return
