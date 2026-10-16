@@ -23,15 +23,45 @@ export const rokuDevices = () => [...devices.values()].filter((d) => !d.pending)
 async function ecp (ip, path) {
   const res = await fetch(`http://${ip}:8060${path}`, { method: 'POST', signal: AbortSignal.timeout(8000) })
   if (res.status === 403) {
-    throw new Error('The Roku blocked CastBot. On the Roku: Settings → System → Advanced system settings → Control by mobile apps → Network access → Permissive')
+    throw new Error('The Roku blocked CastBot. On the Roku: Settings → System → Advanced system settings → Control by mobile apps → set it to Enabled (Network access: Permissive)')
   }
   if (!res.ok) throw new Error(`Roku replied HTTP ${res.status}`)
 }
 
-// Plays a URL in Roku's built-in "Play on Roku" channel.
-export function rokuPlay (ip, url, title, format) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Whether Roku's media player picked the video up (it sometimes opens and quits right away).
+async function playerStarted (ip) {
+  for (let i = 0; i < 8; i++) {
+    await sleep(1500)
+    const p = await rokuProgress(ip).catch(() => null)
+    if (p && ['playing', 'buffering', 'paused'].includes(p.state)) return true
+  }
+  return false
+}
+
+// Plays a URL in Roku's built-in "Play on Roku" channel (app 15985). Roku models differ in which
+// form they accept, so each is tried and checked; the error says what to do if none works.
+export async function rokuPlay (ip, url, title, format) {
   const q = new URLSearchParams({ t: 'v', u: url, videoName: title, videoFormat: format, k: '(null)' })
-  return ecp(ip, `/input/15985?${q}`)
+  const attempts = [`/launch/15985?${q}`, `/input/15985?${q}`]
+  const failures = []
+  for (const path of attempts) {
+    try {
+      await ecp(ip, path)
+    } catch (err) {
+      if (/blocked CastBot/.test(err.message)) throw err
+      failures.push(`${path.split('?')[0]}: ${err.message}`)
+      continue
+    }
+    if (await playerStarted(ip)) {
+      console.log(`[roku] playing via ${path.split('?')[0]}`)
+      return
+    }
+    failures.push(`${path.split('?')[0]}: the player didn't start`)
+  }
+  console.log(`[roku] couldn't play on ${ip}: ${failures.join('; ')}`)
+  throw new Error("This Roku won't play links sent to it (its \"Play on Roku\" player is missing or refused). Make sure Settings → System → Advanced system settings → Control by mobile apps is Enabled, then try again.")
 }
 
 // { position, duration, state } from Roku's media player, in seconds.
