@@ -1,6 +1,7 @@
 // Roku TVs and sticks, controlled through Roku's External Control Protocol (port 8060).
 import { onSsdp } from './ssdp.js'
 import { config } from './config.js'
+import { setMediaItem } from './mediaserver.js'
 
 const devices = new Map() // ip -> { name, ip }
 
@@ -81,6 +82,30 @@ async function playerStarted (ip, label) {
   return { ok: false, last }
 }
 
+// Roku Media Player (channel 2213) lists DLNA servers on the network. CastBot offers the video as
+// "CastBot" there, opens the player, and presses the keys in ROKU_KEYS (comma-separated, e.g.
+// "Down,Select,Select") to reach it; with no keys set you pick CastBot → the video once by hand.
+async function viaMediaPlayer (ip, url, title, format) {
+  const mime = format === 'mkv' ? 'video/x-matroska' : format === 'webm' ? 'video/webm' : 'video/mp4'
+  setMediaItem({ title, url, mime, size: 0 })
+  console.log('[roku] no "Play on Roku"; offering the video on the CastBot media server and opening Roku Media Player')
+  await ecp(ip, '/launch/2213')
+  for (const key of String(config.rokuKeys || '').split(',').map((k) => k.trim()).filter(Boolean)) {
+    await sleep(2500)
+    await ecp(ip, `/keypress/${key}`).catch((err) => console.log(`[roku] key ${key}: ${err.message}`))
+  }
+  for (let i = 0; i < 60; i++) {
+    await sleep(1500)
+    const mp = await getText(ip, '/query/media-player').catch(() => '')
+    if (['play', 'pause', 'buffer', 'open', 'startup'].includes(attr(mp, 'player', 'state') || '')) {
+      console.log('[roku] playing via Roku Media Player')
+      return
+    }
+  }
+  setMediaItem(null)
+  throw new Error(`Roku Media Player is open on the TV but nothing was picked. Choose "CastBot" in its list, then "${title}".`)
+}
+
 // Plays a URL in Roku's built-in "Play on Roku" channel (app 15985). Roku models differ in which
 // form they accept, so each is tried and checked; the error says what was found if none works.
 export async function rokuPlay (ip, url, title, format) {
@@ -88,6 +113,9 @@ export async function rokuPlay (ip, url, title, format) {
   const hasPlayer = apps.some((a) => a.id === '15985')
   const media = apps.filter((a) => a.id === '2213' || /play on roku|media player/i.test(a.name))
   console.log(`[roku] ${apps.length} channels installed; Play on Roku: ${hasPlayer ? 'yes' : 'NO'}; media players: ${media.map((a) => `${a.name} (${a.id})`).join(', ') || 'none'}`)
+
+  // No "Play on Roku": use Roku Media Player, which plays from CastBot's built-in media server.
+  if (!hasPlayer && apps.some((a) => a.id === '2213')) return viaMediaPlayer(ip, url, title, format)
 
   const q = new URLSearchParams({ t: 'v', u: url, videoName: title, videoFormat: format, k: '(null)' })
   const attempts = [`/launch/15985?${q}`, `/input/15985?${q}`]
@@ -125,8 +153,10 @@ export async function rokuProgress (ip) {
 }
 
 const KEYS = { pause: 'Play', resume: 'Play', stop: 'Home' }
+// (stop also withdraws the video from the media server)
 
 export async function rokuControl (ip, action, value) {
+  if (action === 'stop') setMediaItem(null)
   if (KEYS[action]) return ecp(ip, `/keypress/${KEYS[action]}`)
   if (action === 'seek') {
     // Roku has no exact seek over ECP; Instant Replay jumps back ~10s, Fwd scrubs ahead.

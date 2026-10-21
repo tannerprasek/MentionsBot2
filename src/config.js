@@ -49,6 +49,8 @@ export const config = {
   streamingCountry: process.env.STREAMING_COUNTRY || 'US',
   // Start the next episode when one finishes.
   autoNext: bool(process.env.AUTO_NEXT, true),
+  // Remote keys CastBot presses in Roku Media Player to reach its "CastBot" server, e.g. "Down,Select,Select".
+  rokuKeys: process.env.ROKU_KEYS || '',
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
   samsungTokens: {},
   // Pairing keys LG TVs hand out after you accept the prompt, keyed by TV IP.
@@ -56,7 +58,7 @@ export const config = {
 }
 
 // Settings saved from the web page; these override .env.
-export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry', 'autoNext']
+export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry', 'autoNext', 'rokuKeys']
 const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
 
 try {

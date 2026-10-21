@@ -13,6 +13,7 @@ import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from '.
 import * as player from './player.js'
 import { findShow, getShow, cachedImage } from './shows.js'
 import { findTeam, gameReport } from './sports.js'
+import { startMediaServer } from './mediaserver.js'
 import { SHORTCUTS, buildShortcut, bySlug, slug, macInstaller } from './shortcuts.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -263,6 +264,8 @@ app.get('/tvs', auth, async (_req, res) => {
 })
 app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind, ref }) => ({ name, kind, cast: Boolean(ref) }))))
 app.get('/status', auth, (_req, res) => res.json({ ...status, torrent: stats(), progress: player.progress() }))
+
+startMediaServer(app, express)
 
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`CastBot v${version} is running. Open http://localhost:${config.port} in Chrome`)
