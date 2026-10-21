@@ -190,10 +190,26 @@ async function preloadNext (cur) {
     const parsed = { title: cur.title, ...c, isSeries: true, query: epQuery(cur.title, c.season, c.episode) }
     const inPack = fileInCurrent(parsed)
     if (inPack) { inPack.select(); log(`preloading ${epLabel(c.season, c.episode)} from the season pack`); return }
+    // Try the top few results: a season pack without this episode is skipped.
     const results = await search(parsed).catch(() => [])
-    if (results.length) {
-      const file = await preloadTorrent(await resolveTorrent(results[0].link), parsed, keyOf(cur.title, c.season, c.episode))
+    for (const r of results.slice(0, 3)) {
+      const file = await preloadTorrent(await resolveTorrent(r.link), parsed, keyOf(cur.title, c.season, c.episode)).catch(() => null)
       if (file) { log(`preloading ${epLabel(c.season, c.episode)}: ${file.name}`); return }
+    }
+  }
+}
+
+// In the last 90 seconds: quietly download the start of the next episode (and its index at the
+// end of the file) so it begins the moment this one ends.
+async function bufferNext (cur) {
+  await cur.preloading?.catch(() => {}) // a preload that started late may still be fetching
+  for (const c of nextCandidates(cur.season, cur.episode)) {
+    const parsed = { title: cur.title, ...c, isSeries: true }
+    const file = fileInCurrent(parsed) || preloadedFor(keyOf(cur.title, c.season, c.episode))
+    if (file) {
+      log(`buffering ${epLabel(c.season, c.episode)} ahead of time`)
+      await prebuffer(file, 0, null, 85_000)
+      return
     }
   }
 }
@@ -236,7 +252,11 @@ setInterval(async () => {
     if (p.position >= p.duration - 30) cur.nearEnd = true
     if (cur.isSeries && !cur.preloadStarted && p.duration - p.position < 600) {
       cur.preloadStarted = true
-      preloadNext(cur).catch((err) => log('preload failed:', err.message))
+      cur.preloading = preloadNext(cur).catch((err) => log('preload failed:', err.message))
+    }
+    if (cur.isSeries && config.autoNext && !cur.nextBuffered && p.duration - p.position < 90) {
+      cur.nextBuffered = true
+      bufferNext(cur).catch((err) => log('buffering next failed:', err.message))
     }
   }
   const stoppedState = !p || ['stopped', 'idle'].includes(p.state)

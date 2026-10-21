@@ -55,12 +55,21 @@ function removeAndDelete (t) {
 }
 
 // Stops and deletes everything: the torrent being watched and any preloaded next episode.
-export async function stopTorrent () {
-  const torrents = [current?.torrent, preload?.torrent].filter(Boolean)
+// Stops and deletes every torrent, including a preload still fetching its metadata,
+// optionally keeping one that's about to be reused.
+export async function stopTorrent (keep = null) {
   current = null
   preload = null
-  for (const t of new Set(torrents)) await removeAndDelete(t).catch((err) => console.error('[torrent] cleanup', err.message))
+  for (const t of [...client.torrents]) {
+    if (t !== keep) await removeAndDelete(t).catch((err) => console.error('[torrent] cleanup', err.message))
+  }
 }
+
+const whenReady = (t, timeoutMs) => (t.ready ? Promise.resolve(t) : new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('Timed out waiting for torrent metadata (no peers?)')), timeoutMs)
+  t.once('ready', () => { clearTimeout(timer); resolve(t) })
+  t.once('error', (err) => { clearTimeout(timer); reject(err) })
+}))
 
 // Season/episode from a file name like "Show.S02E05.1080p.mkv" or "Show 2x05.mkv".
 export function episodeOf (name) {
@@ -95,20 +104,25 @@ function addTorrent (torrentId, timeoutMs) {
 }
 
 export async function startTorrent (torrentId, req, timeoutMs = 90_000) {
-  await stopTorrent()
-  const t = await addTorrent(torrentId, timeoutMs)
+  // The same torrent may already be here (preloaded as the next episode, or the season pack
+  // being watched): reuse it, which also keeps what it already downloaded.
+  const existing = await client.get(torrentId).catch(() => null)
+  await stopTorrent(existing)
+  const t = existing ? await whenReady(existing, timeoutMs) : await addTorrent(torrentId, timeoutMs)
+  if (existing) console.log(`[torrent] reusing ${t.name}, already downloading`)
   const file = pickFile(t.files, req)
   if (!file) {
-    removeAndDelete(t).catch(() => {})
+    await removeAndDelete(t).catch(() => {})
     throw new Error('No playable video file in torrent')
   }
   // A multi-episode torrent without the requested episode would play the wrong one.
   if (req.episode && !isEpisode(file, req) && t.files.filter(isVideo).length > 1) {
-    removeAndDelete(t).catch(() => {})
+    await removeAndDelete(t).catch(() => {})
     const err = new Error(`That torrent doesn't contain season ${req.season} episode ${req.episode}`)
     err.wrongEpisode = true
     throw err
   }
+  for (const f of t.files) if (f !== file) f.deselect()
   file.select()
   current = { torrent: t, file }
   return file
@@ -128,11 +142,12 @@ export function switchToFile (file) {
 
 // Starts downloading the next episode in the background, keeping the current one playing.
 export async function preloadTorrent (torrentId, req, key, timeoutMs = 120_000) {
-  if (preload) { const old = preload.torrent; preload = null; await removeAndDelete(old).catch(() => {}) }
-  const t = await addTorrent(torrentId, timeoutMs)
+  if (preload) { const old = preload.torrent; preload = null; if (old !== current?.torrent) await removeAndDelete(old).catch(() => {}) }
+  const existing = await client.get(torrentId).catch(() => null)
+  const t = existing ? await whenReady(existing, timeoutMs) : await addTorrent(torrentId, timeoutMs)
   // Only the exact episode: a wrong file here would later play as "next".
   const file = t.files.find((f) => isVideo(f) && isEpisode(f, req))
-  if (!file) { await removeAndDelete(t).catch(() => {}); return null }
+  if (!file) { if (t !== current?.torrent) await removeAndDelete(t).catch(() => {}); return null }
   file.select()
   preload = { torrent: t, file, key }
   return file

@@ -95,7 +95,10 @@ export async function canResume (device) {
 }
 
 export async function playOn (device, url, title, fileName, startAt = 0) {
-  await stopPlayback()
+  // Moving on to the next video on the same Chromecast keeps its player open (seamless);
+  // anything else stops what was playing first.
+  const sameCast = active?.via === 'cast' && device.ref && active.ref === device.ref
+  if (!sameCast) await stopPlayback()
   const ip = await deviceIp(device)
   console.log(`[tv] playing on "${device.name}" (${device.kind}${device.ref ? ' + cast' : ''}, ${ip})`)
   if (device.ref) {
