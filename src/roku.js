@@ -1,14 +1,17 @@
 // Roku TVs and sticks, controlled through Roku's External Control Protocol (port 8060).
 import { onSsdp } from './ssdp.js'
+import { config } from './config.js'
 
 const devices = new Map() // ip -> { name, ip }
 
-onSsdp(async ({ st, usn, location, ip }) => {
-  if (!(st.includes('roku:ecp') || usn.includes('roku:ecp')) || devices.has(ip)) return
-  const host = location ? new URL(location).hostname : ip
+// Asks a host for its Roku device info; adds it to the list when it answers like a Roku.
+async function probe (host, timeoutMs = 4000) {
+  if (devices.has(host)) return
   devices.set(host, { name: 'Roku', ip: host, pending: true })
   try {
-    const xml = await (await fetch(`http://${host}:8060/query/device-info`, { signal: AbortSignal.timeout(4000) })).text()
+    const res = await fetch(`http://${host}:8060/query/device-info`, { signal: AbortSignal.timeout(timeoutMs) })
+    const xml = await res.text()
+    if (!xml.includes('<device-info')) throw new Error('not a Roku')
     const tag = (t) => xml.match(new RegExp(`<${t}>([^<]*)</${t}>`))?.[1]?.trim()
     const name = tag('user-device-name') || tag('friendly-device-name') || tag('default-device-name') || tag('model-name') || 'Roku'
     devices.set(host, { name, ip: host })
@@ -16,7 +19,29 @@ onSsdp(async ({ st, usn, location, ip }) => {
   } catch {
     devices.delete(host)
   }
+}
+
+onSsdp(({ st, usn, location, ip }) => {
+  if (!(st.includes('roku:ecp') || usn.includes('roku:ecp'))) return
+  probe(location ? new URL(location).hostname : ip)
 })
+
+// Backup for routers that block discovery broadcasts: try port 8060 on every address in the
+// home network (x.x.x.1-254), a few at a time, when no Roku has turned up.
+let scanning = false
+export async function scanForRokus () {
+  const m = config.publicHost.match(/^(\d+\.\d+\.\d+)\.\d+$/)
+  if (!m || scanning) return
+  scanning = true
+  const hosts = Array.from({ length: 254 }, (_, i) => `${m[1]}.${i + 1}`).filter((h) => h !== config.publicHost && !devices.has(h))
+  try {
+    for (let i = 0; i < hosts.length; i += 32) await Promise.all(hosts.slice(i, i + 32).map((h) => probe(h, 1500)))
+  } finally {
+    scanning = false
+  }
+}
+setTimeout(() => { if (!rokuDevices().length) scanForRokus() }, 15_000).unref()
+setInterval(() => { if (!rokuDevices().length) scanForRokus() }, 5 * 60_000).unref()
 
 export const rokuDevices = () => [...devices.values()].filter((d) => !d.pending)
 

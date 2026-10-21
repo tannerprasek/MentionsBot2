@@ -4,7 +4,7 @@ import path from 'node:path'
 import { config, saveDeviceKey } from './config.js'
 import { bestTv, tvScore } from './tvmatch.js'
 import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, castProgress, stopCast, control as castControl } from './cast.js'
-import { rokuDevices, rokuPlay, rokuProgress, rokuControl } from './roku.js'
+import { rokuDevices, rokuPlay, rokuProgress, rokuControl, scanForRokus } from './roku.js'
 import { lgDevices, lgPlay, lgControl } from './lg.js'
 import { hasRenderer, dlnaPlay, dlnaProgress, dlnaControl } from './dlna.js'
 import { isSamsung, exitArtMode } from './samsung.js'
@@ -14,6 +14,7 @@ import { searchSsdp } from './ssdp.js'
 export function refreshTvs () {
   refreshCast()
   searchSsdp()
+  if (!rokuDevices().length) scanForRokus()
 }
 setInterval(refreshTvs, 30_000).unref()
 
