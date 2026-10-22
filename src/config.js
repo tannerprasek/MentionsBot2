@@ -44,9 +44,6 @@ export const config = {
   avoidHevc: bool(process.env.AVOID_HEVC, true),
   maxSizeGb: Number(process.env.MAX_SIZE_GB || 15),
   minSeeders: Number(process.env.MIN_SEEDERS || 3),
-  // Services checked before torrenting; if the title is on one, CastBot says so instead of torrenting.
-  streamingServices: (process.env.STREAMING_SERVICES ?? 'netflix,disneyplus,appletvplus').split(',').filter(Boolean),
-  streamingCountry: process.env.STREAMING_COUNTRY || 'US',
   // Start the next episode when one finishes.
   autoNext: bool(process.env.AUTO_NEXT, true),
   // Remote keys CastBot presses in Roku Media Player to reach its "CastBot" server, e.g. "Down,Select,Select".
@@ -58,7 +55,7 @@ export const config = {
 }
 
 // Settings saved from the web page; these override .env.
-export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'streamingServices', 'streamingCountry', 'autoNext', 'rokuKeys']
+export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'autoNext', 'rokuKeys']
 const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
 
 try {

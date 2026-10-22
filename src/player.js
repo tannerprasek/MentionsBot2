@@ -266,7 +266,6 @@ setInterval(async () => {
 // --- "What's playing?" ---
 
 export function describe (status) {
-  if (status.state === 'streaming') return `${status.title} is on ${status.service}.`
   if (status.state === 'buffering') return `Getting ${status.title} ready on ${status.tv}, ${status.buffered || 0} percent buffered.`
   if (['searching', 'connecting'].includes(status.state)) return `Starting ${status.title}.`
   if (!now) return 'Nothing is playing.'

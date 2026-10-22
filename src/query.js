@@ -9,8 +9,7 @@ const pad = (n) => String(n).padStart(2, '0')
 
 export function parseRequest (text) {
   let t = text.trim().replace(/^(play|watch|stream|put on)\s+/i, '')
-  // "torrent <title>" skips the streaming-service check.
-  const force = /^torrent\s+/i.test(t)
+  // A leading "torrent" is harmless filler ("torrent Bluey").
   t = t.replace(/^torrent\s+/i, '')
   // "... from the start" / "restart ..." skips resuming where you left off.
   const fromStart = /\b(from the (start|beginning)|start over|restart)\b/i.test(t)
@@ -32,5 +31,5 @@ export function parseRequest (text) {
   let query = title
   if (season && episode) query += ` S${pad(season)}E${pad(episode)}`
   else if (season) query += ` S${pad(season)}`
-  return { title, season, episode, query, isSeries: Boolean(season), force, fromStart }
+  return { title, season, episode, query, isSeries: Boolean(season), fromStart }
 }

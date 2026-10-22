@@ -99,16 +99,10 @@ Requests are parsed into queries: "season two episode 3" or "s2e3" becomes `S02E
 
 A Roku or LG that also has Chromecast built in is listed once: torrents play over Google Cast (falling back to the Roku/LG player if Cast fails). A Roku without the "Play on Roku" channel (many TCL models) uses **Roku Media Player** instead: CastBot appears there as a media server named "CastBot", opens the player, and offers the video. Set `ROKU_KEYS` (e.g. `Down,Select,Select`) in `.env`, or `rokuKeys` in `settings.json`, to have it press those remote keys to reach CastBot; otherwise pick **CastBot** → the video once by hand. If a Roku refuses commands, set Settings → System → Advanced system settings → Control by mobile apps → Network access to **Permissive**. Roku has no exact seek, so ⟲ 30s uses Instant Replay and 30s ⟳ scrubs forward.
 
-## Streaming services first
-
-Before searching torrents, CastBot checks JustWatch's catalog for whether the title is on Netflix, Disney+ or Apple TV+ (choose which in Settings). If it is, Siri and the page say which service has it and nothing is torrented.
-
-To torrent anyway, click **Play via torrent instead**, or start the request with "torrent", e.g. "torrent Stranger Things".
-
 ## Watching shows
 
 - **Resume:** CastBot saves where you are every 10 seconds. Asking for the same movie or episode again picks up there (Chromecast and LG; Roku always starts from the beginning). Add "from the start" to skip that.
-- **Episode guide:** asking for just a show's name ("torrent Bluey", or any show not on your services) sends back a link to an episode guide: collapsible seasons, thumbnails, what you've watched, and a Continue button. Tap an episode to play it on the chosen TV. Show data and thumbnails come from TVmaze and are cached in `cache/`.
+- **Episode guide:** asking for just a show's name ("Bluey") sends back a link to an episode guide: collapsible seasons, thumbnails, what you've watched, and a Continue button. Tap an episode to play it on the chosen TV. Show data and thumbnails come from TVmaze and are cached in `cache/`.
 - **Next episode:** "CastBot Next" (or ⏭ on the page) plays the following episode on the same TV. With **Play the next episode automatically** on in Settings, it starts by itself when an episode ends.
 - **No waiting between episodes:** 10 minutes before an episode ends, the next one starts downloading in the background. If you're watching from a season pack, it's already there.
 - **No early stalls:** CastBot downloads the start (or the resume point) and the end of the file before it starts the TV.

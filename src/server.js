@@ -8,7 +8,6 @@ import { search } from './search.js'
 import { currentFile, stats, clearDownloads } from './torrent.js'
 import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
-import { findStreaming } from './streaming.js'
 import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
 import * as player from './player.js'
 import { findShow, getShow, cachedImage } from './shows.js'
@@ -81,21 +80,6 @@ app.get('/stream/:name', (req, res) => {
   stream.pipe(res)
 })
 
-// If the title is on one of the user's services, say where instead of torrenting.
-// Returns true when it has sent the response.
-async function tryStreaming (parsed, res) {
-  setStatus({ state: 'searching', title: parsed.title })
-  const hit = await findStreaming(parsed, config.streamingServices, config.streamingCountry).catch((err) => {
-    console.error('[streaming]', err.message)
-    return null
-  })
-  if (!hit) return false
-  console.log(`[streaming] ${hit.title} is on ${hit.serviceName}`)
-  setStatus({ state: 'streaming', title: hit.title, service: hit.serviceName, url: hit.url, note: `Watch it in the ${hit.serviceName} app.` })
-  res.json({ ok: true, streaming: hit, speak: `${hit.title} is on ${hit.serviceName}.` })
-  return true
-}
-
 app.get('/api/search', auth, async (req, res) => {
   if (!req.query.q) return res.status(400).json({ error: 'q is required' })
   const parsed = parseRequest(String(req.query.q))
@@ -134,11 +118,6 @@ app.post('/play', auth, async (req, res) => {
         setStatus({ state: 'game', title: team.name, note: report.speak })
         return res.json({ ok: true, game: report.state, speak: report.speak })
       }
-    }
-
-    if (!req.body?.link && !parsed.force && !req.body?.force) {
-      const handled = await tryStreaming(parsed, res)
-      if (handled) return
     }
 
     // Just a show's name: send back a link to the episode guide instead of guessing an episode.

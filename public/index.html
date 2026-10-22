@@ -81,10 +81,6 @@
     <label class="check"><input type="checkbox" id="s_avoidHevc"> Skip HEVC / x265 (most Chromecasts can't play it)</label>
     <label class="check"><input type="checkbox" id="s_allow4k"> Allow 4K</label>
     <label class="check"><input type="checkbox" id="s_autoNext"> Play the next episode automatically</label>
-    <label>Check my streaming services first, and tell me instead of torrenting when the title is there</label>
-    <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="netflix"> Netflix</label>
-    <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="disneyplus"> Disney+</label>
-    <label class="check" style="margin-top:4px"><input type="checkbox" class="svc" value="appletvplus"> Apple TV+</label>
     <div class="full">
       <label for="token">Access token (only if API_TOKEN is set on the server)</label>
       <input type="password" id="token">
@@ -118,9 +114,6 @@
     </div>
     <div class="bar" id="nowBarWrap"><div id="nowBar"></div></div>
     <div class="small muted" id="nowStats"></div>
-    <div class="row hidden" id="appRow" style="margin-top:12px">
-      <button id="torrentInstead">Play via torrent instead</button>
-    </div>
     <div class="row" id="castRow" style="margin-top:12px">
       <button data-act="seek" data-val="-30">⟲ 30s</button>
       <button data-act="pause">❚❚ Pause</button>
@@ -197,12 +190,6 @@ $('refreshTv').onclick = async () => {
 const query = () => $('q').value.trim()
 $('searchForm').onsubmit = (e) => { e.preventDefault(); playBest() }
 $('playBest').onclick = playBest
-$('torrentInstead').onclick = async () => {
-  try {
-    const r = await api('/play', { method: 'POST', body: { title: query() || $('nowTitle').textContent, tv: $('tv').value, force: true } })
-    toast(r.speak); poll()
-  } catch (err) { toast(err.message) }
-}
 $('searchBtn').onclick = showResults
 
 async function playBest () {
@@ -243,7 +230,7 @@ async function showResults () {
 }
 
 // Now playing
-const STATE_TEXT = { game: 'NHL', buffering: 'Buffering…', streaming: 'On a streaming service', searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
+const STATE_TEXT = { game: 'NHL', buffering: 'Buffering…',  searching: 'Searching…', 'finding-tv': 'Finding TV…', connecting: 'Connecting to peers…', playing: 'Playing', error: 'Error', idle: '' }
 let pollTimer
 async function poll () {
   clearTimeout(pollTimer)
@@ -255,8 +242,7 @@ async function poll () {
       $('nowTitle').textContent = s.title || ''
       const ep = s.season && s.episode ? `S${s.season}E${s.episode}` : ''
       $('nowRelease').textContent = [ep, s.release, s.tv && 'on ' + s.tv].filter(Boolean).join(' · ')
-      const inApp = s.state === 'streaming' || s.state === 'game'
-      $('appRow').classList.toggle('hidden', !inApp || s.state === 'game')
+      const inApp = s.state === 'game'
       $('castRow').classList.toggle('hidden', inApp)
       $('nowBarWrap').classList.toggle('hidden', inApp)
       if (inApp) $('nowRelease').textContent = s.state === 'game' ? '' : 'On ' + s.service
@@ -303,7 +289,6 @@ async function loadSettings () {
       if (el.type === 'checkbox') el.checked = settings[k]
       else el.value = settings[k] ?? ''
     }
-    document.querySelectorAll('.svc').forEach((el) => { el.checked = (settings.streamingServices || []).includes(el.value) })
     const p = settings.prowlarr
     if (settings.torznabUrl) {
       $('source').textContent = 'Searching: ' + settings.torznabUrl
@@ -324,7 +309,6 @@ $('saveSettings').onclick = async () => {
     const el = $('s_' + k)
     body[k] = el.type === 'checkbox' ? el.checked : el.value
   }
-  body.streamingServices = [...document.querySelectorAll('.svc')].filter((el) => el.checked).map((el) => el.value)
   try {
     await api('/api/settings', { method: 'POST', body })
     toast('Saved')
