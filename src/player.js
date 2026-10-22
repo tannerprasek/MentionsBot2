@@ -32,7 +32,9 @@ function saveHistory () {
 }
 
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-const keyOf = (title, season, episode) => norm(title) + (season ? ` s${season}e${episode || 0}` : '')
+// Shows that share a name (the US, UK and Australian "The Traitors") keep separate history.
+const showKey = (title, variant) => norm(title) + (variant ? ' ' + String(variant).toLowerCase() : '')
+const keyOf = (title, season, episode, variant) => showKey(title, variant) + (season ? ` s${season}e${episode || 0}` : '')
 const pad = (n) => String(n).padStart(2, '0')
 const epQuery = (title, s, e) => `${title} S${pad(s)}E${pad(e)}`
 const epLabel = (s, e) => (s && e ? `season ${s} episode ${e}` : '')
@@ -50,18 +52,18 @@ function resumePoint (key, parsed) {
 export function plan (parsed) {
   const out = { ...parsed }
   if (!out.season) {
-    const show = history.shows[norm(out.title)]
+    const show = history.shows[showKey(out.title, out.variant)]
     if (show) {
       const next = show.finished ? { season: show.season, episode: show.episode + 1 } : show
       Object.assign(out, { season: next.season, episode: next.episode, isSeries: true, query: epQuery(out.title, next.season, next.episode), continued: true })
     }
   }
-  return { parsed: out, resume: resumePoint(keyOf(out.title, out.season, out.episode), out) }
+  return { parsed: out, resume: resumePoint(keyOf(out.title, out.season, out.episode, out.variant), out) }
 }
 
 // What's been watched of a show, for the episode guide: progress per "SxE" and where to continue.
-export function watchState (title) {
-  const t = norm(title)
+export function watchState (title, variant) {
+  const t = showKey(title, variant)
   const episodes = {}
   for (const [k, v] of Object.entries(history.items)) {
     const m = k.match(/^(.*) s(\d+)e(\d+)$/)
@@ -115,7 +117,7 @@ export async function start ({ parsed, result, results, device, resume, file: re
     const season = parsed.season || ep?.season
     const episode = parsed.episode || ep?.episode
     const isSeries = Boolean(season && episode)
-    const key = keyOf(parsed.title, season, episode)
+    const key = keyOf(parsed.title, season, episode, parsed.variant)
     if (resume === undefined) resume = resumePoint(key, parsed)
     if (resume && !(await canResume(device))) resume = null
     const info = { ...base, season, episode, file: file.name }
@@ -127,11 +129,11 @@ export async function start ({ parsed, result, results, device, resume, file: re
     })
 
     await playOn(device, streamUrl(file, device), parsed.title, file.name, resume?.startAt || 0)
-    now = { title: parsed.title, season, episode, isSeries, key, device, release: result?.title, fileName: file.name, nearEnd: false, preloadStarted: false }
+    now = { title: parsed.title, variant: parsed.variant, season, episode, isSeries, key, device, release: result?.title, fileName: file.name, nearEnd: false, preloadStarted: false }
     last = now
     progressInfo = resume ? { position: resume.startAt, duration: resume.startAt / resume.ratio, state: 'playing' } : null
     if (isSeries) {
-      history.shows[norm(parsed.title)] = { season, episode, finished: false }
+      history.shows[showKey(parsed.title, parsed.variant)] = { season, episode, finished: false }
       saveHistory()
     }
     statusFn({ state: 'playing', ...info, resumedAt: resume?.startAt })
@@ -156,10 +158,10 @@ const nextCandidates = (s, e) => [{ season: s, episode: e + 1 }, { season: s + 1
 export async function playNext (prev = lastPlayed()) {
   if (!prev?.isSeries) return { ok: false, speak: "There's no show to continue." }
   for (const c of nextCandidates(prev.season, prev.episode)) {
-    const parsed = { title: prev.title, ...c, isSeries: true, query: epQuery(prev.title, c.season, c.episode) }
+    const parsed = { title: prev.title, variant: prev.variant, ...c, isSeries: true, query: epQuery(prev.title, c.season, c.episode) }
     const label = `${prev.title}, ${epLabel(c.season, c.episode)}`
     const speak = `Playing ${label} on ${prev.device.name}.`
-    const opts = { parsed, device: prev.device, resume: resumePoint(keyOf(prev.title, c.season, c.episode), parsed) }
+    const opts = { parsed, device: prev.device, resume: resumePoint(keyOf(prev.title, c.season, c.episode, prev.variant), parsed) }
 
     const inPack = fileInCurrent(parsed)
     if (inPack) {
@@ -168,7 +170,7 @@ export async function playNext (prev = lastPlayed()) {
       start({ ...opts, file: inPack, result: { title: inPack.name } })
       return { ok: true, speak }
     }
-    if (preloadedFor(keyOf(prev.title, c.season, c.episode))) {
+    if (preloadedFor(keyOf(prev.title, c.season, c.episode, prev.variant))) {
       log(`next: ${label} was preloaded`)
       const file = await promotePreload()
       start({ ...opts, file, result: { title: file.name } })
@@ -187,13 +189,13 @@ export async function playNext (prev = lastPlayed()) {
 // Downloads the next episode in the background while the current one plays.
 async function preloadNext (cur) {
   for (const c of nextCandidates(cur.season, cur.episode)) {
-    const parsed = { title: cur.title, ...c, isSeries: true, query: epQuery(cur.title, c.season, c.episode) }
+    const parsed = { title: cur.title, variant: cur.variant, ...c, isSeries: true, query: epQuery(cur.title, c.season, c.episode) }
     const inPack = fileInCurrent(parsed)
     if (inPack) { inPack.select(); log(`preloading ${epLabel(c.season, c.episode)} from the season pack`); return }
     // Try the top few results: a season pack without this episode is skipped.
     const results = await search(parsed).catch(() => [])
     for (const r of results.slice(0, 3)) {
-      const file = await preloadTorrent(await resolveTorrent(r.link), parsed, keyOf(cur.title, c.season, c.episode)).catch(() => null)
+      const file = await preloadTorrent(await resolveTorrent(r.link), parsed, keyOf(cur.title, c.season, c.episode, cur.variant)).catch(() => null)
       if (file) { log(`preloading ${epLabel(c.season, c.episode)}: ${file.name}`); return }
     }
   }
@@ -204,8 +206,8 @@ async function preloadNext (cur) {
 async function bufferNext (cur) {
   await cur.preloading?.catch(() => {}) // a preload that started late may still be fetching
   for (const c of nextCandidates(cur.season, cur.episode)) {
-    const parsed = { title: cur.title, ...c, isSeries: true }
-    const file = fileInCurrent(parsed) || preloadedFor(keyOf(cur.title, c.season, c.episode))
+    const parsed = { title: cur.title, variant: cur.variant, ...c, isSeries: true }
+    const file = fileInCurrent(parsed) || preloadedFor(keyOf(cur.title, c.season, c.episode, cur.variant))
     if (file) {
       log(`buffering ${epLabel(c.season, c.episode)} ahead of time`)
       await prebuffer(file, 0, null, 85_000)
@@ -221,7 +223,7 @@ async function finished (reason) {
     const prev = now
     log(`${prev.title} ${epLabel(prev.season, prev.episode)} finished (${reason})`)
     history.items[prev.key] = { ...history.items[prev.key], finished: true, position: 0, updated: Date.now() }
-    if (prev.isSeries) history.shows[norm(prev.title)] = { season: prev.season, episode: prev.episode, finished: true }
+    if (prev.isSeries) history.shows[showKey(prev.title, prev.variant)] = { season: prev.season, episode: prev.episode, finished: true }
     saveHistory()
     now = null
     progressInfo = null

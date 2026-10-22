@@ -102,7 +102,7 @@ A Roku or LG that also has Chromecast built in is listed once: torrents play ove
 ## Watching shows
 
 - **Resume:** CastBot saves where you are every 10 seconds. Asking for the same movie or episode again picks up there (Chromecast and LG; Roku always starts from the beginning). Add "from the start" to skip that.
-- **Episode guide:** asking for just a show's name ("Bluey") sends back a link to an episode guide: collapsible seasons, thumbnails, what you've watched, and a Continue button. Tap an episode to play it on the chosen TV. Show data and thumbnails come from TVmaze and are cached in `cache/`.
+- **Episode guide:** asking for just a show's name ("Bluey") sends back a link to an episode guide: collapsible seasons, thumbnails, what you've watched, and a Continue button. If several shows share the name (the US, UK and Australian "The Traitors", or "Traitors" vs "The Traitors"), you first get a picker with posters, years, countries and networks. Tap an episode to play it on the chosen TV; torrents are searched for that country's version. Show data and thumbnails come from TVmaze and are cached in `cache/`.
 - **Next episode:** "CastBot Next" (or ⏭ on the page) plays the following episode on the same TV. With **Play the next episode automatically** on in Settings, it starts by itself when an episode ends.
 - **No waiting between episodes:** 10 minutes before an episode ends, the next one starts downloading in the background. If you're watching from a season pack, it's already there.
 - **No early stalls:** CastBot downloads the start (or the resume point) and the end of the file before it starts the TV.

@@ -52,7 +52,28 @@ async function torznabSearch (req) {
 }
 
 // A Torznab URL set in Settings wins; otherwise search all indexers of the local Prowlarr.
+// Country tags releases use for same-named shows ("The Traitors US S02E01").
+const TAGS = ['US', 'UK', 'AU', 'NZ', 'CA', 'DE', 'FR', 'NL', 'IE']
+const hasTag = (name, tag) => new RegExp(`[. _()\\[-]${tag}[. _()\\]-]`, 'i').test(name)
+const tagOf = (variant) => (variant === 'GB' ? 'UK' : variant)
+
 export async function search (req) {
+  // A show sharing its name with another country's: search with the country tag first, and
+  // always rank the wrong country's releases out.
+  if (/^[A-Za-z]{2}$/.test(req.variant || '')) {
+    const tag = tagOf(req.variant)
+    const base = req.query.slice(req.title.length)
+    const tagged = tag === 'UK' ? [] : await searchOnce({ ...req, query: `${req.title} ${tag}${base}` }).catch(() => [])
+    const results = tagged.length ? tagged : await searchOnce(req)
+    return results
+      .filter((r) => !TAGS.filter((t) => t !== tag).some((t) => hasTag(r.title, t)))
+      .map((r) => (hasTag(r.title, tag) ? { ...r, score: r.score + 20 } : r))
+      .sort((a, b) => b.score - a.score)
+  }
+  return searchOnce(req)
+}
+
+async function searchOnce (req) {
   let results
   if (config.torznabUrl) {
     results = await torznabSearch(req)

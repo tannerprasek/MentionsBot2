@@ -10,7 +10,7 @@ import { prowlarrStatus } from './prowlarr.js'
 import fs from 'node:fs'
 import { listDevices, refreshTvs, pickDevice, canResume, controlActive } from './tvs.js'
 import * as player from './player.js'
-import { findShow, getShow, cachedImage } from './shows.js'
+import { findShows, getShow, cachedImage } from './shows.js'
 import { findTeam, gameReport } from './sports.js'
 import { startMediaServer } from './mediaserver.js'
 import { SHORTCUTS, buildShortcut, bySlug, slug, macInstaller } from './shortcuts.js'
@@ -120,20 +120,28 @@ app.post('/play', auth, async (req, res) => {
       }
     }
 
-    // Just a show's name: send back a link to the episode guide instead of guessing an episode.
+    // Just a show's name: send back a link to the episode guide (or a picker when several shows
+    // share the name, like the US, UK and Australian "The Traitors") instead of guessing an episode.
     if (!parsed.season && !req.body?.link && !req.body?.noGuide) {
-      const show = await findShow(parsed.title).catch((err) => { console.error('[shows]', err.message); return null })
-      if (show) {
-        const guidePath = `/show.html?id=${show.id}${tvName ? `&tv=${encodeURIComponent(tvName)}` : ''}`
+      const shows = await findShows(parsed.title).catch((err) => { console.error('[shows]', err.message); return [] })
+      if (shows.length) {
+        const tvPart = tvName ? `&tv=${encodeURIComponent(tvName)}` : ''
         // Link back through whatever address the phone used (LAN, castbot.local or Tailscale).
-        const url = `http://${req.get('host') || `${config.publicHost}:${config.port}`}${guidePath}`
+        const host = req.get('host') || `${config.publicHost}:${config.port}`
+        const guidePath = shows.length === 1
+          ? `/show.html?id=${shows[0].id}${tvPart}`
+          : `/pick.html?q=${encodeURIComponent(parsed.title)}${tvPart}`
         setStatus({ state: 'idle' })
-        console.log(`[shows] ${show.name}: sending the episode guide`)
-        return res.json({ ok: true, guide: true, url, guidePath, speak: `Pick an episode of ${show.name} on your phone.` })
+        console.log(`[shows] "${parsed.title}": ${shows.length === 1 ? shows[0].name : `${shows.length} matches, sending the picker`}`)
+        const speak = shows.length === 1
+          ? `Pick an episode of ${shows[0].name} on your phone.`
+          : `There are ${shows.length} shows called ${parsed.title}. Choose one on your phone.`
+        return res.json({ ok: true, guide: true, url: `http://${host}${guidePath}`, guidePath, speak })
       }
     }
 
     // A known episode resumes mid-way.
+    if (req.body?.variant) parsed.variant = String(req.body.variant).toUpperCase().slice(0, 8)
     const { parsed: planned, resume } = player.plan(parsed)
 
     let best
@@ -192,7 +200,22 @@ app.get('/api/show/:id', auth, async (req, res) => {
   try {
     const show = await getShow(req.params.id)
     if (!show) return res.status(404).json({ error: 'show not found' })
-    res.json({ ...show, watched: player.watchState(show.name) })
+    // Same-named shows from different countries need telling apart when searching and in history.
+    const norm = (n) => n.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const peers = (await findShows(show.name).catch(() => [])).filter((p) => norm(p.name) === norm(show.name))
+    // The country tells same-named shows apart; if two share a country, the year does.
+    const sameCountry = peers.filter((p) => p.country === show.country).length > 1
+    const variant = peers.length < 2 ? null : sameCountry ? `${show.country || 'XX'}${show.year || ''}` : show.country
+    res.json({ ...show, variant, watched: player.watchState(show.name, variant) })
+  } catch (err) {
+    res.status(502).json({ error: err.message })
+  }
+})
+
+// Shows matching a name, for the picker.
+app.get('/api/shows', async (req, res) => {
+  try {
+    res.json(await findShows(String(req.query.q || '')))
   } catch (err) {
     res.status(502).json({ error: err.message })
   }

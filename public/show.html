@@ -127,7 +127,7 @@ function render () {
   const openSeason = cont ? cont.season : show.seasons[0]?.season
 
   let html = `<div class="hero">${show.poster ? `<img src="${esc(show.poster)}" alt="">` : ''}
-    <div><h1>${esc(show.name)}</h1><div class="muted small">${[show.year, show.seasons.length + ' season' + (show.seasons.length === 1 ? '' : 's'), all.length + ' episodes'].filter(Boolean).join(' · ')}</div>
+    <div><h1>${esc(show.name)}</h1><div class="muted small">${[show.year, [show.network, show.country].filter(Boolean).join(' · '), show.seasons.length + ' season' + (show.seasons.length === 1 ? '' : 's'), all.length + ' episodes'].filter(Boolean).join(' · ')}</div>
     <div class="small muted clamp" style="margin-top:6px">${esc(show.summary)}</div></div></div>
     <div class="panel" style="padding:10px 12px"><label class="small muted" for="tv">Play on</label><select id="tv"><option>Loading TVs…</option></select></div>`
 
@@ -174,7 +174,7 @@ async function playEpisode (season, episode) {
   if (starting) return
   starting = true
   try {
-    const r = await api('/play', { method: 'POST', body: { title: `${show.name} season ${season} episode ${episode}`, tv: $('tv').value } })
+    const r = await api('/play', { method: 'POST', body: { title: `${show.name} season ${season} episode ${episode}`, tv: $('tv').value, variant: show.variant } })
     toast(r.speak || 'Starting…')
     poll()
   } catch (err) { toast(err.message) } finally { setTimeout(() => { starting = false }, 1500) }
