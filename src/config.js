@@ -46,7 +46,7 @@ export const config = {
   minSeeders: Number(process.env.MIN_SEEDERS || 3),
   // Start the next episode when one finishes.
   autoNext: bool(process.env.AUTO_NEXT, true),
-  // Remote keys CastBot presses in Roku Media Player to reach its "CastBot" server, e.g. "Down,Select,Select".
+  // Replaces the four OK presses CastBot sends in Roku Media Player, e.g. "Down,Select,Select".
   rokuKeys: process.env.ROKU_KEYS || '',
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
   samsungTokens: {},

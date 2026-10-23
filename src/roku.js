@@ -83,15 +83,21 @@ async function playerStarted (ip, label) {
 }
 
 // Roku Media Player (channel 2213) lists DLNA servers on the network. CastBot offers the video as
-// "CastBot" there, opens the player, and presses the keys in ROKU_KEYS (comma-separated, e.g.
-// "Down,Select,Select") to reach it; with no keys set you pick CastBot → the video once by hand.
+// "CastBot" there and opens the player, waits 5 seconds for it to load, then presses OK (Select)
+// four times, a second apart, to go CastBot → the video → play. ROKU_KEYS (comma-separated, e.g.
+// "Down,Select") replaces those four presses.
+const DEFAULT_KEYS = ['Select', 'Select', 'Select', 'Select']
 async function viaMediaPlayer (ip, url, title, format) {
   const mime = format === 'mkv' ? 'video/x-matroska' : format === 'webm' ? 'video/webm' : 'video/mp4'
   setMediaItem({ title, url, mime, size: 0 })
   console.log('[roku] no "Play on Roku"; offering the video on the CastBot media server and opening Roku Media Player')
   await ecp(ip, '/launch/2213')
-  for (const key of String(config.rokuKeys || '').split(',').map((k) => k.trim()).filter(Boolean)) {
-    await sleep(2500)
+  const custom = String(config.rokuKeys || '').split(',').map((k) => k.trim()).filter(Boolean)
+  const keys = custom.length ? custom : DEFAULT_KEYS
+  await sleep(5000)
+  for (const [i, key] of keys.entries()) {
+    if (i) await sleep(1000)
+    console.log(`[roku] pressing ${key} (${i + 1}/${keys.length})`)
     await ecp(ip, `/keypress/${key}`).catch((err) => console.log(`[roku] key ${key}: ${err.message}`))
   }
   for (let i = 0; i < 60; i++) {
@@ -103,7 +109,7 @@ async function viaMediaPlayer (ip, url, title, format) {
     }
   }
   setMediaItem(null)
-  throw new Error(`Roku Media Player is open on the TV but nothing was picked. Choose "CastBot" in its list, then "${title}".`)
+  throw new Error(`Roku Media Player is open on the TV but the video didn't start. Choose "CastBot" in its list, then "${title}".`)
 }
 
 // Plays a URL in Roku's built-in "Play on Roku" channel (app 15985). Roku models differ in which
