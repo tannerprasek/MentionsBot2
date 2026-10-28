@@ -107,8 +107,10 @@ export async function playOn (device, url, title, fileName, startAt = 0, mime) {
   const lgCast = device.kind === 'cast' && /\blg\b|webos/i.test(device.name)
   if (lgCast && !hasRenderer(ip)) {
     // The TV's DLNA player may simply not have answered the network search yet.
-    searchSsdp()
-    for (let i = 0; i < 12 && !hasRenderer(ip); i++) await sleep(500)
+    for (let i = 0; i < 16 && !hasRenderer(ip); i++) {
+      if (i % 4 === 0) searchSsdp()
+      await sleep(500)
+    }
   }
   let castError = null
   if (device.ref && !(lgCast && hasRenderer(ip))) {
