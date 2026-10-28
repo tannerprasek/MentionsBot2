@@ -102,7 +102,16 @@ export async function playOn (device, url, title, fileName, startAt = 0, mime) {
   if (!sameCast) await stopPlayback()
   const ip = await deviceIp(device)
   console.log(`[tv] playing on "${device.name}" (${device.kind}${device.ref ? ' + cast' : ''}, ${ip})`)
-  if (device.ref) {
+  // An LG's Google Cast can't open a media player (the launch fails with SYSTEM_ERROR), so an LG
+  // that offers DLNA is played that way and Cast is only tried when there's no alternative.
+  const lgCast = device.kind === 'cast' && /\blg\b|webos/i.test(device.name)
+  if (lgCast && !hasRenderer(ip)) {
+    // The TV's DLNA player may simply not have answered the network search yet.
+    searchSsdp()
+    for (let i = 0; i < 12 && !hasRenderer(ip); i++) await sleep(500)
+  }
+  let castError = null
+  if (device.ref && !(lgCast && hasRenderer(ip))) {
     if (device.kind === 'cast' && await isSamsung(ip)) {
       await exitArtMode(ip, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) }).catch(() => {})
     }
@@ -111,9 +120,15 @@ export async function playOn (device, url, title, fileName, startAt = 0, mime) {
       active = { ...device, ip, via: 'cast' }
       return
     } catch (err) {
-      if (device.kind === 'cast') throw err
-      console.error(`[tv] Cast failed on ${device.name} (${err.message}); using ${device.kind} instead`)
+      castError = err
+      console.error(`[tv] Cast failed on ${device.name} (${err.message})${hasRenderer(ip) ? '; using DLNA instead' : device.kind === 'cast' ? '' : `; using ${device.kind} instead`}`)
     }
+  }
+  // A plain Chromecast has no other way to play.
+  if (castError && device.kind === 'cast' && !hasRenderer(ip)) {
+    throw lgCast
+      ? new Error("The LG's Chromecast can't play videos and its other player (DLNA) wasn't found. Make sure the LG is fully on (not standby) and try again in a few seconds.")
+      : castError
   }
   // Native players get the file's real content type (the ?cast=1 flag forces video/mp4).
   const nativeUrl = url.replace(/\?cast=1$/, '')
@@ -124,7 +139,7 @@ export async function playOn (device, url, title, fileName, startAt = 0, mime) {
   } else {
     await lgPlay(ip, nativeUrl, title, mime || mimeOf(fileName), lgKeys)
   }
-  active = { ...device, ip, via: device.kind }
+  active = { ...device, ip, via: device.kind === 'cast' ? 'dlna' : device.kind }
 }
 
 // Opens a streaming service's app on the TV. Throws when this TV can't be told to.
