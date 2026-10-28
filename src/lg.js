@@ -1,7 +1,9 @@
 // LG webOS TVs: discovery via SSDP, playback/remote control over LG's SSAP API (lgtv2).
 import LGTV from 'lgtv2'
 import { XMLParser } from 'fast-xml-parser'
-import { onSsdp } from './ssdp.js'
+import net from 'node:net'
+import { onSsdp, probeSsdp } from './ssdp.js'
+import { config } from './config.js'
 
 const parser = new XMLParser({ ignoreAttributes: true })
 const devices = new Map() // ip -> { name, ip }
@@ -21,6 +23,41 @@ onSsdp(async ({ st, location, ip }) => {
 })
 
 export const lgDevices = () => [...devices.values()].filter((d) => !d.pending)
+
+const portOpen = (ip, port, ms = 1200) => new Promise((resolve) => {
+  const sock = net.connect({ host: ip, port })
+  const done = (ok) => { sock.destroy(); resolve(ok) }
+  sock.setTimeout(ms, () => done(false))
+  sock.once('connect', () => done(true))
+  sock.once('error', () => done(false))
+})
+
+// Asks one address directly for its LG/DLNA description. True when it turns out to be an LG.
+export async function probeLg (ip) {
+  if (devices.has(ip) && !devices.get(ip).pending) return true
+  await probeSsdp(ip, 2500)
+  await new Promise((r) => setTimeout(r, 600)) // the description is fetched after the answer arrives
+  return devices.has(ip) && !devices.get(ip).pending
+}
+
+// For networks that drop broadcast searches: find webOS TVs by their remote-control port
+// (3001, or 3000 on older sets) across the home network, then ask each one directly.
+let scanning = false
+export async function scanForLgs () {
+  const m = config.publicHost.match(/^(\d+\.\d+\.\d+)\.\d+$/)
+  if (!m || scanning) return
+  scanning = true
+  try {
+    const hosts = Array.from({ length: 254 }, (_, i) => `${m[1]}.${i + 1}`).filter((h) => h !== config.publicHost && !devices.has(h))
+    for (let i = 0; i < hosts.length; i += 32) {
+      await Promise.all(hosts.slice(i, i + 32).map(async (h) => {
+        if ((await portOpen(h, 3001)) || (await portOpen(h, 3000))) await probeLg(h)
+      }))
+    }
+  } finally {
+    scanning = false
+  }
+}
 
 // The first connection shows a pairing prompt on the TV; the key it returns is saved via saveKey.
 function connect (ip, clientKey, saveKey) {

@@ -51,12 +51,14 @@ export const config = {
   // Remote-control tokens Samsung TVs hand out after you press Allow, keyed by TV IP.
   samsungTokens: {},
   // Pairing keys LG TVs hand out after you accept the prompt, keyed by TV IP.
-  lgKeys: {}
+  lgKeys: {},
+  // TVs seen before, by IP: asked directly at startup in case they don't answer broadcast searches.
+  knownTvs: {}
 }
 
 // Settings saved from the web page; these override .env.
 export const EDITABLE = ['torznabUrl', 'torznabApiKey', 'defaultTv', 'preferredQuality', 'allow4k', 'avoidHevc', 'maxSizeGb', 'minSeeders', 'autoNext', 'rokuKeys']
-const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys']
+const SAVED = [...EDITABLE, 'samsungTokens', 'lgKeys', 'knownTvs']
 
 try {
   Object.assign(config, JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')))

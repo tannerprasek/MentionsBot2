@@ -4,12 +4,22 @@ import mdns from 'multicast-dns'
 import dns from 'node:dns/promises'
 import net from 'node:net'
 
-const client = new ChromecastAPI()
-client.on('device', (d) => {
-  console.log(`[cast] found "${d.friendlyName}" at ${d.host}`)
-  // The IP lets a Cast-enabled LG/Roku/Samsung be merged with its native entry.
-  resolveHost(d.host).then((ip) => { d.ip = ip }).catch(() => {})
-})
+function makeClient () {
+  const c = new ChromecastAPI()
+  c.on('device', (d) => {
+    console.log(`[cast] found "${d.friendlyName}" at ${d.host}`)
+    // The IP lets a Cast-enabled LG/Roku/Samsung be merged with its native entry.
+    resolveHost(d.host).then((ip) => { d.ip = ip }).catch(() => {})
+  })
+  return c
+}
+let client = makeClient()
+
+// Rebuilds the Cast search (its sockets go stale after the PC sleeps or changes networks).
+export function resetCast () {
+  try { client.destroy() } catch {}
+  client = makeClient()
+}
 
 
 // Cast devices advertise a "<uuid>.local" host, which Windows can't resolve without Bonjour,

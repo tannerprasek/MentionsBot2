@@ -288,7 +288,7 @@ app.get('/api/version', (_req, res) => res.json({ version }))
 app.get('/tvs', auth, async (_req, res) => {
   // Search again first, so a TV switched on a moment ago is in the list.
   refreshTvs()
-  await new Promise((r) => setTimeout(r, 1500))
+  await new Promise((r) => setTimeout(r, 2500))
   res.json(listDevices().map((d) => d.name))
 })
 app.get('/devices', auth, (_req, res) => res.json(listDevices().map(({ name, kind, ref }) => ({ name, kind, cast: Boolean(ref) }))))

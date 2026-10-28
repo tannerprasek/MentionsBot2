@@ -1,22 +1,76 @@
 // One list of every TV CastBot can drive (Chromecast / Google Cast, Roku, LG webOS),
 // with name matching, playback and remote control routed to the right protocol.
 import path from 'node:path'
-import { config, saveDeviceKey } from './config.js'
+import { config, saveDeviceKey, lanAddresses } from './config.js'
 import { bestTv, tvScore } from './tvmatch.js'
-import { castDevices, refreshCast, onCastFinished, resolveHost, play as castPlay, castProgress, stopCast, control as castControl } from './cast.js'
+import { castDevices, refreshCast, resetCast, onCastFinished, resolveHost, play as castPlay, castProgress, stopCast, control as castControl } from './cast.js'
 import { rokuDevices, rokuPlay, rokuProgress, rokuControl, scanForRokus } from './roku.js'
-import { lgDevices, lgPlay, lgControl } from './lg.js'
+import { lgDevices, lgPlay, lgControl, scanForLgs } from './lg.js'
 import { hasRenderer, dlnaPlay, dlnaProgress, dlnaControl } from './dlna.js'
 import { isSamsung, exitArtMode } from './samsung.js'
-import { searchSsdp } from './ssdp.js'
+import { searchSsdp, resetSsdp, probeSsdp } from './ssdp.js'
 
-// Look for TVs every 30 seconds, so one that was just switched on shows up without a restart.
+// --- Finding TVs ---
+// Searches again every 30 seconds (so a TV switched on later shows up), asks TVs seen before
+// directly (works when broadcast searches don't get through), scans for a Roku or LG that
+// hasn't turned up, and restarts the whole search when the network changes.
+
+let netSig = lanAddresses().map((a) => a.address).join(',')
+let emptySince = 0
+let lastReset = Date.now()
+
+function resetDiscovery (why) {
+  console.log(`[discovery] restarting the TV search (${why})`)
+  lastReset = Date.now()
+  resetCast()
+  resetSsdp()
+}
+
+// Remembers every TV that has been found, so it can be asked directly next time.
+function rememberTvs () {
+  for (const d of listDevices()) {
+    if (!d.ip) continue
+    const known = config.knownTvs[d.ip]
+    if (!known || known.name !== d.name || known.kind !== d.kind) saveDeviceKey('knownTvs', d.ip, { name: d.name, kind: d.kind })
+  }
+}
+
+function probeKnown () {
+  const present = new Set(listDevices().map((d) => d.ip))
+  for (const ip of Object.keys(config.knownTvs)) if (!present.has(ip)) probeSsdp(ip).catch(() => {})
+}
+
+function watchNetwork () {
+  const sig = lanAddresses().map((a) => a.address).join(',')
+  if (sig !== netSig) {
+    netSig = sig
+    const ip = lanAddresses()[0]?.address
+    if (!process.env.PUBLIC_HOST && ip && ip !== config.publicHost) {
+      console.log(`[net] this PC's address changed: ${config.publicHost} → ${ip}`)
+      config.publicHost = ip
+    }
+    emptySince = 0
+    return resetDiscovery('the network changed')
+  }
+  if (listDevices().length) { emptySince = 0; return }
+  if (!emptySince) emptySince = Date.now()
+  if (Date.now() - emptySince > 60_000 && Date.now() - lastReset > 60_000) {
+    emptySince = Date.now()
+    resetDiscovery('no TVs found for a minute')
+  }
+}
+
 export function refreshTvs () {
   refreshCast()
   searchSsdp()
+  probeKnown()
   if (!rokuDevices().length) scanForRokus()
+  if (!lgDevices().length) scanForLgs()
 }
-setInterval(refreshTvs, 30_000).unref()
+
+setInterval(() => { watchNetwork(); refreshTvs(); rememberTvs() }, 30_000).unref()
+setTimeout(() => { probeKnown(); if (!lgDevices().length) scanForLgs() }, 8_000).unref()
+setTimeout(rememberTvs, 14_000).unref()
 
 export const onPlaybackFinished = (fn) => onCastFinished(() => { active = null; fn() })
 

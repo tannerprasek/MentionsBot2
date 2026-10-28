@@ -1,6 +1,6 @@
 {
   "name": "castbot",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "description": "Siri -> torrent -> Chromecast streaming server",
   "main": "src/server.js",
   "scripts": {

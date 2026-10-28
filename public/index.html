@@ -181,7 +181,8 @@ async function loadTvs () {
 $('tv').onchange = () => store.set('tv', $('tv').value)
 $('refreshTv').onclick = async () => {
   toast('Looking for TVs…')
-  await new Promise((r) => setTimeout(r, 3000))
+  await api('/tvs').catch(() => {}) // asks CastBot to search again, and waits a moment for answers
+  await new Promise((r) => setTimeout(r, 2500))
   const d = await loadTvs()
   toast(d.length ? `Found ${d.length} TV${d.length > 1 ? 's' : ''}` : 'No TVs found. Same Wi-Fi?')
 }
