@@ -13,6 +13,8 @@ import * as player from './player.js'
 import { findShows, getShow, cachedImage } from './shows.js'
 import { findTeam, gameReport } from './sports.js'
 import { startMediaServer } from './mediaserver.js'
+import { parseLink, probeLink, mimeForExt, cleanTitle } from './links.js'
+import { episodeOf } from './torrent.js'
 import { SHORTCUTS, buildShortcut, bySlug, slug, macInstaller } from './shortcuts.js'
 
 const { version } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -109,6 +111,31 @@ app.post('/play', auth, async (req, res) => {
 
   const parsed = parseRequest(text)
   try {
+    // A pasted link (magnet, .torrent or direct video address) plays as is: no searching.
+    const link = await probeLink(parseLink(text) || { kind: null })
+    if (link.kind) {
+      if (link.kind === 'page') {
+        return res.status(400).json({ error: 'that link is a web page', speak: "That link is a web page, not a video file. I need a magnet link, a torrent, or a direct video link." })
+      }
+      const { device, exact } = await pickDevice(tvName, config.defaultTv)
+      if (!device) {
+        setStatus({ state: 'error', title: link.title, error: 'No TVs found on the network' })
+        return res.status(404).json({ error: 'no TVs found', speak: "I couldn't find any TVs on your network." })
+      }
+      const tv = device.name
+      console.log(`[link] ${link.kind}: ${link.title} → "${tv}" (${device.kind})`)
+      setStatus({ state: 'connecting', title: link.title, tv })
+      lastServed = Date.now()
+      if (link.kind === 'direct') {
+        player.startDirect({ url: link.url, title: link.title, fileName: link.name, mime: mimeForExt(link.ext), device })
+      } else {
+        const ep = episodeOf(link.name)
+        const parsedLink = { title: link.title, season: ep?.season, episode: ep?.episode, isSeries: Boolean(ep), query: link.name }
+        player.start({ parsed: parsedLink, result: { title: link.name, link: link.url }, device })
+      }
+      return res.json({ ok: true, link: link.kind, tv, speak: `${exact || !tvName ? '' : `I couldn't find a TV called ${tvName}. `}Playing ${link.title} on ${tv}.` })
+    }
+
     // An NHL team ("Winnipeg Jets", "leafs game"): say whether it's on, the score, and the channels.
     if (!req.body?.link && !parsed.season) {
       const team = await findTeam(text).catch((err) => { console.error('[sports]', err.message); return null })

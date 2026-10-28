@@ -87,7 +87,7 @@ export const deviceIp = async (d) => d.ip || resolveHost(d.host)
 let active = null // the device currently playing a CastBot stream
 
 const mimeOf = (file) => (/\.mkv$/i.test(file) ? 'video/x-matroska' : /\.webm$/i.test(file) ? 'video/webm' : 'video/mp4')
-const formatOf = (file) => path.extname(file).slice(1).toLowerCase() || 'mp4'
+const formatOf = (file) => { const e = path.extname(file).slice(1).toLowerCase(); return e === 'm3u8' ? 'hls' : e === 'mpd' ? 'dash' : e || 'mp4' }
 
 // Chromecast and DLNA (LG) can start partway in; Roku's "Play on Roku" can't.
 export async function canResume (device) {
@@ -95,7 +95,7 @@ export async function canResume (device) {
   return device.kind === 'lg' && hasRenderer(await deviceIp(device))
 }
 
-export async function playOn (device, url, title, fileName, startAt = 0) {
+export async function playOn (device, url, title, fileName, startAt = 0, mime) {
   // Moving on to the next video on the same Chromecast keeps its player open (seamless);
   // anything else stops what was playing first.
   const sameCast = active?.via === 'cast' && device.ref && active.ref === device.ref
@@ -107,7 +107,7 @@ export async function playOn (device, url, title, fileName, startAt = 0) {
       await exitArtMode(ip, { token: config.samsungTokens[ip], onToken: (t) => saveDeviceKey('samsungTokens', ip, t) }).catch(() => {})
     }
     try {
-      await castPlay(device.ref, url, title, startAt)
+      await castPlay(device.ref, url, title, startAt, mime)
       active = { ...device, ip, via: 'cast' }
       return
     } catch (err) {
@@ -120,9 +120,9 @@ export async function playOn (device, url, title, fileName, startAt = 0) {
   if (device.kind === 'roku') {
     await rokuPlay(ip, nativeUrl, title, formatOf(fileName))
   } else if (hasRenderer(ip)) {
-    await dlnaPlay(ip, nativeUrl, title, mimeOf(fileName), startAt)
+    await dlnaPlay(ip, nativeUrl, title, mime || mimeOf(fileName), startAt)
   } else {
-    await lgPlay(ip, nativeUrl, title, mimeOf(fileName), lgKeys)
+    await lgPlay(ip, nativeUrl, title, mime || mimeOf(fileName), lgKeys)
   }
   active = { ...device, ip, via: device.kind }
 }

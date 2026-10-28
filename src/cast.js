@@ -56,22 +56,22 @@ function closeSession () {
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, res) => (err ? reject(err) : resolve(res))))
 
-const mediaFor = (url, title) => ({
+const mediaFor = (url, title, contentType) => ({
   contentId: url,
-  // Default Media Receiver plays H.264 MKVs when told they are video/mp4.
-  contentType: 'video/mp4',
+  // Default Media Receiver plays H.264 MKVs when told they are video/mp4; streams say what they are.
+  contentType: contentType === 'application/x-mpegURL' || contentType === 'application/dash+xml' ? contentType : 'video/mp4',
   streamType: 'BUFFERED',
   metadata: { type: 0, metadataType: 0, title }
 })
 
-export async function play (device, url, title, startTime = 0) {
+export async function play (device, url, title, startTime = 0, contentType) {
   // Same TV, player already open (e.g. the next episode): just load the new video into it,
   // so there's no reconnect or receiver splash between episodes.
   if (session?.device === device) {
     const { player } = session
     try {
       const st = await Promise.race([
-        call((cb) => player.load(mediaFor(url, title), { autoplay: true, currentTime: startTime }, cb)),
+        call((cb) => player.load(mediaFor(url, title, contentType), { autoplay: true, currentTime: startTime }, cb)),
         new Promise((_resolve, reject) => setTimeout(() => reject(new Error('timeout')), 20_000))
       ])
       if (session?.player === player) session.duration = st?.media?.duration
@@ -106,7 +106,7 @@ export async function play (device, url, title, startTime = 0) {
         for (const fn of finishedHandlers) fn()
       }
     })
-    const st = await Promise.race([call((cb) => player.load(mediaFor(url, title), { autoplay: true, currentTime: startTime }, cb)), failed, timeout(60_000, 'loading the video')])
+    const st = await Promise.race([call((cb) => player.load(mediaFor(url, title, contentType), { autoplay: true, currentTime: startTime }, cb)), failed, timeout(60_000, 'loading the video')])
     if (session?.player === player) session.duration = st?.media?.duration
   } catch (err) {
     if (session?.client === client) session = null

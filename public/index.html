@@ -93,7 +93,7 @@
 
   <section class="panel">
     <form class="row" id="searchForm">
-      <input type="text" id="q" placeholder="Movie or show, e.g. The Bear season 2 episode 4" autocomplete="off" autofocus>
+      <input type="text" id="q" placeholder="Movie or show, or paste a link" autocomplete="off" autofocus>
       <select id="tv" title="TV"></select>
       <button type="button" class="icon" id="refreshTv" title="Look for TVs again">↻</button>
     </form>
@@ -205,6 +205,7 @@ async function playBest () {
 
 async function showResults () {
   if (!query()) return $('q').focus()
+  if (/(magnet:\?|https?:\/\/)/i.test(query())) return playBest()
   $('resultsPanel').classList.remove('hidden')
   $('resultsInfo').textContent = 'Searching…'
   $('results').innerHTML = ''

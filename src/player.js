@@ -143,6 +143,29 @@ export async function start ({ parsed, result, results, device, resume, file: re
   }
 }
 
+// Plays a direct video/stream address on a TV: nothing to download, so just hand it over.
+export async function startDirect ({ url, title, fileName, mime, device }) {
+  const tv = device.name
+  if (now) last = now
+  now = null
+  progressInfo = null
+  try {
+    statusFn({ state: 'connecting', title, tv })
+    await stopTorrent() // drops a previous download; nothing is downloaded for a link
+    const key = keyOf(title, 0, 0, 'link')
+    let resume = resumePoint(key, {})
+    if (resume && !(await canResume(device))) resume = null
+    await playOn(device, url, title, fileName, resume?.startAt || 0, mime)
+    now = { title, isSeries: false, key, device, release: url, fileName, nearEnd: false, preloadStarted: false }
+    last = now
+    progressInfo = null
+    statusFn({ state: 'playing', title, tv, file: fileName, release: url, resumedAt: resume?.startAt })
+  } catch (err) {
+    console.error(err.stack)
+    statusFn({ state: 'error', title, error: err.message })
+  }
+}
+
 export async function stop () {
   if (now) last = now
   now = null
