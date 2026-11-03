@@ -1,3 +1,4 @@
+import { logText } from './log.js'
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -283,6 +284,8 @@ app.post('/control/:action', auth, async (req, res) => {
   }
 })
 
+app.get('/api/log', auth, (_req, res) => res.type('text/plain').send(logText()))
+app.post('/api/quit', auth, (_req, res) => { res.json({ ok: true }); console.log('[quit] stopped from the web page'); setTimeout(() => process.exit(0), 300) })
 app.get('/api/version', (_req, res) => res.json({ version }))
 // Plain list of TV names, for the Siri Shortcut's "Choose from List".
 app.get('/tvs', auth, async (_req, res) => {

@@ -60,8 +60,18 @@
 <main>
   <header>
     <h1>CastBot <span class="small muted" id="ver" style="font-weight:400"></span></h1>
-    <span><a class="icon" href="/siri.html" style="text-decoration:none;color:var(--muted);margin-right:6px">🎙 Set up Siri</a><button class="icon" id="settingsBtn" title="Settings">⚙ Settings</button></span>
+    <span><a class="icon" href="/siri.html" style="text-decoration:none;color:var(--muted);margin-right:6px">🎙 Set up Siri</a><button class="icon" id="logBtn" title="Show the log">📋 Log</button><button class="icon" id="settingsBtn" title="Settings">⚙ Settings</button></span>
   </header>
+
+  <section class="panel hidden" id="logPanel">
+    <pre id="logText" style="margin:0 0 12px;max-height:340px;overflow:auto;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+    <div class="row">
+      <button id="logRefresh">Refresh</button>
+      <button id="logCopy">Copy</button>
+      <button id="logQuit" title="Stop CastBot">⏻ Quit CastBot</button>
+      <button id="logClose">Close</button>
+    </div>
+  </section>
 
   <section class="panel hidden" id="settings">
     <strong>Settings</strong>
@@ -275,6 +285,24 @@ $('vol').oninput = () => {
 const clock = (sec) => { sec = Math.round(sec); const h = Math.floor(sec / 3600); const m = Math.floor(sec / 60) % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec % 60).padStart(2, '0') }
 $('nextBtn').onclick = async () => { const r = await api('/next', { method: 'POST' }).catch((e) => ({ speak: e.message })); toast(r.speak); poll() }
 $('stopBtn').onclick = async () => { await api('/stop', { method: 'POST' }).catch((e) => toast(e.message)); poll() }
+
+// Log
+async function loadLog () {
+  try {
+    const r = await fetch('/api/log', { headers: { Authorization: 'Bearer ' + (store.get('token') || '') } })
+    $('logText').textContent = r.ok ? (await r.text()) || '(nothing logged yet)' : 'Could not load the log (' + r.status + ').'
+  } catch { $('logText').textContent = 'CastBot is not running.' }
+  $('logText').scrollTop = $('logText').scrollHeight
+}
+$('logBtn').onclick = () => { $('logPanel').classList.toggle('hidden'); if (!$('logPanel').classList.contains('hidden')) loadLog() }
+$('logRefresh').onclick = loadLog
+$('logClose').onclick = () => $('logPanel').classList.add('hidden')
+$('logCopy').onclick = () => navigator.clipboard.writeText($('logText').textContent).then(() => toast('Copied'), () => toast("Couldn't copy"))
+$('logQuit').onclick = async () => {
+  if (!confirm('Stop CastBot? Start it again from the CastBot file.')) return
+  await api('/api/quit', { method: 'POST' }).catch(() => {})
+  toast('CastBot stopped')
+}
 
 // Settings
 let settings = {}

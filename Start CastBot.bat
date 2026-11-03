@@ -1,6 +1,10 @@
 @echo off
 rem Double-click to start CastBot on Windows. Updates itself, then opens the page in Chrome.
 cd /d "%~dp0"
+
+rem Already running? Just open the page.
+curl -s -m 2 http://localhost:8787/api/version >nul 2>nul
+if not errorlevel 1 goto openPage
 set "NODE_VERSION=22.23.2"
 
 rem Use the installed Node.js, or a private copy in .\runtime (downloaded the first time).
@@ -26,8 +30,9 @@ goto run
 call npm install --omit=dev --loglevel=error --no-audit --no-fund
 del .needs-install 2>nul
 :run
-start "" cmd /c "timeout /t 2 >nul & start chrome http://localhost:8787 || start http://localhost:8787"
-echo.
-echo CastBot is running. Keep this window open while you watch. Close it to stop.
-node src\server.js
-pause
+rem Runs hidden; the page has a Log button (and Quit) if something goes wrong.
+powershell -NoProfile -Command "Start-Process node -ArgumentList 'src\server.js' -WindowStyle Hidden"
+timeout /t 2 >nul
+:openPage
+start chrome http://localhost:8787 || start http://localhost:8787
+exit /b 0
