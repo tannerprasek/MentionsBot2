@@ -194,7 +194,7 @@ async function poll () {
     $('now').classList.toggle('show', active)
     if (active) {
       $('nowTitle').textContent = [s.title, s.season && s.episode ? `S${s.season}E${s.episode}` : ''].filter(Boolean).join(' · ')
-      $('nowState').textContent = s.state === 'error' ? s.error : s.state === 'buffering' ? `Buffering… ${s.buffered || 0}%` : STATE[s.state] || s.state
+      $('nowState').textContent = s.state === 'error' ? s.error + (s.fix ? ' — ' + s.fix : '') : s.state === 'buffering' ? `Buffering… ${s.buffered || 0}%` : STATE[s.state] || s.state
       $('nowState').className = 'state small ' + s.state
       document.querySelector('#now .btns').style.display = s.state === 'error' ? 'none' : ''
       const p = s.progress

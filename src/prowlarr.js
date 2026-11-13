@@ -46,9 +46,14 @@ export async function prowlarrSearch (req, apiKey) {
   url.searchParams.set('query', req.query)
   url.searchParams.set('type', 'search')
   url.searchParams.append('categories', req.isSeries ? '5000' : '2000')
-  const res = await fetch(url, { signal: AbortSignal.timeout(60_000) }).catch((err) => {
-    throw new Error(`Can't reach Prowlarr at ${PROWLARR_URL} (${err.cause?.code || err.message}). Open Prowlarr and make sure it's running`)
-  })
+  const go = () => fetch(url, { signal: AbortSignal.timeout(60_000) })
+  let res = await go().catch(() => null)
+  if (!res) {
+    // Prowlarr isn't answering: start it and try once more.
+    const { startProwlarr } = await import('./heal.js')
+    if (await startProwlarr()) res = await go().catch(() => null)
+  }
+  if (!res) throw new Error(`Can't reach Prowlarr at ${PROWLARR_URL}. It isn't running`)
   if (!res.ok) throw new Error(`Prowlarr search failed: HTTP ${res.status}`)
   return (await res.json())
     .filter((r) => r.protocol === 'torrent')

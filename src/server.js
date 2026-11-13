@@ -1,4 +1,5 @@
 import { logText } from './log.js'
+import { adviceFor } from './heal.js'
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,7 +40,15 @@ setInterval(async () => {
     setStatus({ state: 'idle' })
   }
 }, 60_000).unref()
-const setStatus = (s) => { status = { ...s, at: new Date().toISOString() }; console.log('[status]', status) }
+const setStatus = (s) => {
+  status = { ...s, at: new Date().toISOString() }
+  if (s.state === 'error') {
+    status.fix = adviceFor(s.error)
+    refreshTvs() // a TV that wasn't answering may be found by the next try
+    console.log('[fix]', status.fix)
+  }
+  console.log('[status]', status)
+}
 player.onStatus(setStatus)
 
 function auth (req, res, next) {
@@ -203,7 +212,7 @@ app.post('/play', auth, async (req, res) => {
     res.json({ ok: true, query: planned.query, release: best.title, seeders: best.seeders, tv, fallback: !exact, speak })
   } catch (err) {
     setStatus({ state: 'error', title: parsed.title, error: err.message })
-    res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}` })
+    res.status(500).json({ error: err.message, speak: `Something went wrong: ${err.message}`, fix: adviceFor(err.message) })
   }
 })
 
