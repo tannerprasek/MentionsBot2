@@ -35,7 +35,9 @@ async function torznabSearch (req) {
   url.searchParams.set('q', req.query)
   url.searchParams.set('cat', req.isSeries ? '5000' : '2000')
 
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(60_000) }).catch((err) => {
+    throw new Error(`Can't reach the Torznab URL (${err.cause?.code || err.message}). Check it in Settings and that the indexer app is running`)
+  })
   if (!res.ok) throw new Error(`Indexer search failed: HTTP ${res.status}`)
   const doc = parser.parse(await res.text())
   const items = [].concat(doc?.rss?.channel?.item || [])
