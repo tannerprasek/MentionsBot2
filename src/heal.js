@@ -57,6 +57,7 @@ const RULES = [
   [/Can't reach the Torznab/i, 'Check the Torznab URL in ⚙ Settings, and that the program it points to is running.'],
   [/no results/i, 'Nothing matched. In Prowlarr, make sure at least a few indexers are added and enabled, or try "Show all results" with a looser name.'],
   [/No TVs found/i, 'Switch the TV on (not standby), make sure this PC is on the same Wi-Fi, then tap ↻ next to the TV list.'],
+  [/No playable video/i, 'Every release CastBot tried was fake or empty. Tap "Show all results" and pick one by hand, or try again later.'],
   [/metadata|no peers/i, 'That release has no one sharing it. Tap "Show all results" and pick one with more seeders.'],
   [/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND/i, 'A network connection failed. Check this PC is online and on the same Wi-Fi as the TV, then try again.'],
   [/fetch failed/i, 'A network connection failed. Check this PC is online, then try again.'],

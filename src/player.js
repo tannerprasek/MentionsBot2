@@ -101,16 +101,17 @@ export async function start ({ parsed, result, results, device, resume, file: re
     statusFn({ state: 'connecting', ...base })
     // Try the top results in turn when one turns out not to contain the requested episode.
     let file = readyFile
-    const candidates = results?.length ? results.slice(0, 3) : [result]
+    const candidates = results?.length ? results.slice(0, 6) : [result]
     for (const r of readyFile ? [] : candidates) {
       try {
-        file = await startTorrent(await resolveTorrent(r.link), parsed)
+        file = await startTorrent(await resolveTorrent(r.link), parsed, r === candidates[0] ? 90_000 : 30_000)
         result = r
         base.release = r.title
         break
       } catch (err) {
         if (!err.wrongEpisode || r === candidates[candidates.length - 1]) throw err
         log(`skipping ${r.title}: ${err.message}`)
+        statusFn({ state: 'connecting', ...base, note: 'Trying another release…' })
       }
     }
     const ep = episodeOf(file.name)

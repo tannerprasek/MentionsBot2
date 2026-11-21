@@ -96,7 +96,9 @@ function addTorrent (torrentId, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       removeAndDelete(torrent).catch(() => {})
-      reject(new Error('Timed out waiting for torrent metadata (no peers?)'))
+      const err = new Error('Timed out waiting for torrent metadata (no peers?)')
+      err.wrongEpisode = true // skippable
+      reject(err)
     }, timeoutMs)
     const torrent = client.add(torrentId, { path: dir(), deselect: true }, (t) => { clearTimeout(timer); resolve(t) })
     torrent.on('error', (err) => { clearTimeout(timer); reject(err) })
@@ -113,7 +115,9 @@ export async function startTorrent (torrentId, req, timeoutMs = 90_000) {
   const file = pickFile(t.files, req)
   if (!file) {
     await removeAndDelete(t).catch(() => {})
-    throw new Error('No playable video file in torrent')
+    const err = new Error('No playable video file in torrent')
+    err.wrongEpisode = true // skippable: the player moves on to the next result
+    throw err
   }
   // A multi-episode torrent without the requested episode would play the wrong one.
   if (req.episode && !isEpisode(file, req) && t.files.filter(isVideo).length > 1) {
