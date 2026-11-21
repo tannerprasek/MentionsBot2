@@ -54,8 +54,22 @@ export async function prowlarrSearch (req, apiKey) {
     if (await startProwlarr()) res = await go().catch(() => null)
   }
   if (!res) throw new Error(`Can't reach Prowlarr at ${PROWLARR_URL}. It isn't running`)
-  if (!res.ok) throw new Error(`Prowlarr search failed: HTTP ${res.status}`)
-  return (await res.json())
+  if (!res.ok) {
+    const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300)
+    console.error(`[prowlarr] search ${url.pathname}?query=${req.query} → HTTP ${res.status}: ${body}`)
+    // Some Prowlarr builds fail on the category filter: try once more without it.
+    if (res.status >= 500 && url.searchParams.has('categories')) {
+      url.searchParams.delete('categories')
+      const again = await go().catch(() => null)
+      if (again?.ok) return mapResults(await again.json())
+    }
+    throw new Error(`Prowlarr search failed: HTTP ${res.status}${body ? ` (${body})` : ''}`)
+  }
+  return mapResults(await res.json())
+}
+
+function mapResults (list) {
+  return list
     .filter((r) => r.protocol === 'torrent')
     .map((r) => ({
       title: String(r.title),

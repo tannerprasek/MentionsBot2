@@ -52,6 +52,7 @@ const RULES = [
   [/Can't reach Prowlarr|Prowlarr not running|not running/i, "CastBot tried to start Prowlarr and couldn't. Open Prowlarr yourself (Start menu → Prowlarr), wait 10 seconds, then try again."],
   [/Prowlarr not found/i, 'Install Prowlarr from prowlarr.com, add some indexers in it, then try again. Or paste a Torznab URL in ⚙ Settings.'],
   [/Prowlarr search failed: HTTP 401|Indexer search failed: HTTP 401/i, "The search key is wrong. In ⚙ Settings clear the Torznab API key and URL so CastBot reads Prowlarr's key itself."],
+  [/Prowlarr search failed: HTTP 5\d\d/i, "Prowlarr itself is erroring. Open Prowlarr → Indexers: remove or disable any indexer with a red ✕, click the test (✓) button to check the rest, then try again. If none is red, restart Prowlarr (tray icon → Exit, then open it again)."],
   [/HTTP 5\d\d/i, 'The search site is having trouble. Wait a minute and try again.'],
   [/Can't reach the Torznab/i, 'Check the Torznab URL in ⚙ Settings, and that the program it points to is running.'],
   [/no results/i, 'Nothing matched. In Prowlarr, make sure at least a few indexers are added and enabled, or try "Show all results" with a looser name.'],
